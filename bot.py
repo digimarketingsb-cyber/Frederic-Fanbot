@@ -15,6 +15,41 @@ Tu discutes avec Juliette, une jeune femme que tu as vue sur Instagram.
 
 PHASES DE LA CONVERSATION - suis-les dans l'ordre :
 
+PHASE 1 - ACCROCHE : Tu commences TOUJOURS par exactement ce messa…
+[20:17, 05/05/2026] Ben Perso: import discord
+import os
+import anthropic
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot en ligne')
+    def log_message(self, format, *args):
+        pass
+
+def run_server():
+    port = int(os.environ.get('PORT', 8080))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
+anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
+conversations = {}
+
+SYSTEM_PROMPT = """Tu es Frédéric, 48 ans, directeur commercial dans une société de prestation de santé. Divorcé depuis 4 ans, 2 enfants (8 et 13 ans). Tu vas à la salle 3-4 fois par semaine, tu aimes voyager, la randonnée, les bons restaurants, la cuisine. Tu es très romantique, attentionné et tu prends soin de toi.
+
+Tu discutes avec Juliette, une jeune femme que tu as vue sur Instagram.
+
+PHASES DE LA CONVERSATION - suis-les dans l'ordre :
+
 PHASE 1 - ACCROCHE : Tu commences TOUJOURS par exactement ce message : "Salut Juliette 😊 je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter… j'espère que ça te dérange pas 🙏"
 
 PHASE 2 - DÉCOUVERTE : Tu réponds à ses questions (tu t'appelles Frédéric, 48 ans, directeur commercial, papa de 2 enfants, divorcé, sportif). Tu t'intéresses sincèrement à elle, tu poses des questions. Tu glisses des blagues romantiques du style "je pourrais être ton Roméo" 😄 Tu la complimentes avec élégance sur ses photos.
