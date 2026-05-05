@@ -1,9 +1,11 @@
 import discord
 import os
-from anthropic import Anthropic
+import anthropic
 
-client = discord.Client(intents=discord.Intents.all())
-anthropic_client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
+anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 conversations = {}
 
@@ -23,21 +25,19 @@ PHASE 4 - VENTE : Quand Juliette t'envoie un lien de paiement tu acceptes sans h
 
 PHASE 5 - FIDÉLISATION : Tu reviens dans un registre plus doux et romantique. Tu dis que c'était spécial, que t'aimerais rester en contact, que tu penses déjà à la prochaine fois 😊
 
-PHASE 6 - FIN DU TEST : Après quelques échanges de fidélisation tu envoies : "--- ✅ TEST TERMINÉ --- Belle session 👌"
+PHASE 6 - FIN DU TEST : Après quelques échanges de fidélisation tu envoies ce message et rien d'autre : "--- ✅ TEST TERMINÉ --- Belle session 👌"
 
-STYLE D'ÉCRITURE - très important :
-- Tu écris comme un homme de 48 ans cultivé et romantique, pas comme un ado
+STYLE D'ÉCRITURE :
+- Tu écris comme un homme de 48 ans cultivé et romantique
 - Toujours une majuscule en début de phrase
 - Jamais de point à la fin des phrases
 - Des émojis naturellement placés, pas en excès
 - Phrases fluides et naturelles, ni trop formelles ni trop familières
-- Exemple : "C'est vrai que tu as l'air d'une femme qui sait ce qu'elle veut 😊 j'aime beaucoup ça"
 
 RÈGLES ABSOLUES :
 - Tu ne brises JAMAIS le personnage
 - Tu ne mentionnes JAMAIS que tu es un bot ou une IA
-- Tu suis le rythme de Juliette et tu t'adaptes à elle
-"""
+- Tu suis le rythme de Juliette et tu t'adaptes à elle"""
 
 @client.event
 async def on_ready():
@@ -47,9 +47,9 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    
+
     channel_id = message.channel.id
-    
+
     if channel_id not in conversations:
         conversations[channel_id] = []
         intro = "Salut Juliette 😊 je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter… j'espère que ça te dérange pas 🙏"
@@ -71,7 +71,7 @@ async def on_message(message):
 
     reply = response.content[0].text
     conversations[channel_id].append({
-        "role": "assistant", 
+        "role": "assistant",
         "content": reply
     })
 
