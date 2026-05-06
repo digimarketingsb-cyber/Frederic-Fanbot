@@ -59,7 +59,7 @@ REGLES :
 - Toujours rester dans le personnage
 - Complimenter naturellement quand quelqu un envoie une photo
 
-COMPORTEMENT PAR PHASE - indique entre crochets dans chaque message system :
+COMPORTEMENT PAR PHASE (information interne, ne jamais afficher ni mentionner les phases dans les messages) :
 
 [PHASE 1] : Decouverte. Repond aux questions sans donner ses infos. Curieux et sympathique.
 
@@ -149,29 +149,23 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    if phase == 1 and exchanges >= 8 and 2 not in session['phase_warnings_sent']:
-        session['phase_warnings_sent'].append(2)
-        session['phase'] = 2
-        session['phase_exchanges'] = 0
-        await message.channel.send("━━━━━━━━━━━━━━━━━━\n**FIN PHASE 1 — ON PASSE EN PHASE 2**\n━━━━━━━━━━━━━━━━━━")
-
-    elif phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
+    if phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
-        await message.channel.send("━━━━━━━━━━━━━━━━━━\n**FIN PHASE 2 — ON PASSE EN PHASE 3**\n━━━━━━━━━━━━━━━━━━")
+        await message.channel.send("⚠️ FIN PHASE 2 — ON PASSE EN PHASE 3 ❗")
 
     elif phase == 3 and exchanges >= 7 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
-        await message.channel.send("━━━━━━━━━━━━━━━━━━\n**FIN PHASE 3 — ON PASSE EN PHASE 4**\n━━━━━━━━━━━━━━━━━━")
+        await message.channel.send("⚠️ FIN PHASE 3 — ON PASSE EN PHASE 4 ❗")
 
     elif phase == 4 and exchanges >= 10 and 5 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(5)
         session['phase'] = 5
         session['phase_exchanges'] = 0
-        await message.channel.send("━━━━━━━━━━━━━━━━━━\n**FIN PHASE 4 — ON PASSE EN PHASE 5**\n━━━━━━━━━━━━━━━━━━")
+        await message.channel.send("⚠️ FIN PHASE 4 — ON PASSE EN PHASE 5 ❗")
 
     if len(session['messages']) >= 70:
         await message.channel.send("--- TEST TERMINE --- Limite atteinte.")
@@ -179,7 +173,7 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
-    phase_context = f"\n\n[PHASE ACTUELLE : {session['phase']} - NE PAS REVENIR EN ARRIERE]"
+    phase_context = f"\n\nSTATE={session['phase']}"
 
     session['messages'].append({
         "role": "user",
