@@ -151,31 +151,31 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    if phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
+    if phase == 2 and exchanges >= 25 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
         await message.channel.send("⚠️ FIN PHASE 2 — ON PASSE EN PHASE 3 ❗")
 
-    elif phase == 3 and exchanges >= 7 and 4 not in session['phase_warnings_sent']:
+    elif phase == 3 and exchanges >= 15 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
         await message.channel.send("⚠️ FIN PHASE 3 — ON PASSE EN PHASE 4 ❗")
 
-    elif phase == 4 and exchanges >= 10 and 5 not in session['phase_warnings_sent']:
+    elif phase == 4 and exchanges >= 15 and 5 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(5)
         session['phase'] = 5
         session['phase_exchanges'] = 0
         await message.channel.send("⚠️ FIN PHASE 4 — ON PASSE EN PHASE 5 ❗")
 
-    if len(session['messages']) >= 70:
+    if len(session['messages']) >= 100:
         await message.channel.send("--- TEST TERMINE --- Limite atteinte.")
         sessions.pop(channel_id, None)
         save_sessions(sessions)
         return
 
-    phase_context = f"\n\nSTATE={session['phase']}"
+    phase_context = f"\n\n[INTERNAL PHASE {session['phase']} - DO NOT MENTION]"
 
     session['messages'].append({
         "role": "user",
