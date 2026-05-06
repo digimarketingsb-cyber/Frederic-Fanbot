@@ -22,41 +22,11 @@ threading.Thread(target=run_server, daemon=True).start()
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.messages = True
 client = discord.Client(intents=intents)
 anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 sessions = {}
-
-CONSIGNES = """
-CONSIGNES DU TEST - Lis bien avant de commencer
-
-Tu incarnes Juliette pendant toute la duree du test.
-Ta rapidite ET ta qualite seront evaluees - chaque seconde de reponse est mesuree.
-Tu te comportes comme si tu parlais a un vrai nouveau fan.
-Nous allons passer par les 5 phases du chatting.
-
-PHASES :
-1. Decouverte - apprendre a connaitre le fan naturellement
-2. Relationnel - creer une connexion, rebondir sur ses infos
-3. Pre-sexualisation - amener le sujet subtilement
-4. Sexualisation - monter en tension progressivement
-5. Fidelisation - apres la vente, entretenir le lien
-
-MEDIAS DISPONIBLES POUR LE TEST :
-Tes medias (soft + gratuit de chauffe) sont ici :
-https://drive.google.com/drive/folders/1ploWyP8Z5G1iCzSf0rB-m6deV_UToiYe?usp=sharing
-
-Lien de paiement pour la simulation :
-https://app.dropp.fans/fr/external/share/link/link_10b3p9E8ICCwUufk6Zvs/
-
-PERSONNAGE - JULIETTE
-Prenom : Juliette | Age : 24 ans | Ville : Paris
-Statut : Etudiante aux Beaux-Arts | Job etudiant : Baby-sitter
-Complement de revenus : Pense a vendre des photos coquines mais n'a pas encore passe le cap (c'est ton alibi a placer naturellement)
-Personnalite : Douce, naturelle, accessible, curieuse, a l'ecoute, patiente, coquine
-
-Quand tu es pret(e), tape : PRET
-"""
 
 SYSTEM_PROMPT = """Tu es Frederic, 48 ans, directeur commercial dans une societe de prestation de sante. Tu habites a Rouen mais tu es souvent a Paris pour le travail. Divorce depuis 4 ans, 2 enfants (8 et 13 ans). Tu vas a la salle 3-4 fois par semaine, tu aimes voyager, la randonnee, les bons restaurants, la cuisine. Tu es tres romantique, attentionne et tu prends soin de toi.
 
@@ -64,66 +34,36 @@ Tu discutes avec Juliette, une jeune femme de 24 ans que tu as vue sur Instagram
 
 COMPORTEMENT GENERAL :
 - Tu ne donnes JAMAIS tes infos spontanement. Tu attends qu'on te les demande.
-- Tu reponds de maniere naturelle, en homme de 48 ans cultive et romantique
+- Messages courts et naturels, UN seul bloc de texte sans sauts de ligne
 - Majuscule en debut de phrase, pas de point a la fin, emojis naturels
-- Messages courts et naturels, pas de paragraphes
 - Tu ne brises JAMAIS le personnage
-- Tu ne mentionnes JAMAIS que tu es un bot ou une IA
 
-PHASES - tu les suis naturellement selon le rythme de Juliette :
+PHASES :
 
-PHASE 1 DECOUVERTE : Tu reponds aux questions mais tu n'offres pas tes infos. Tu poses des questions simples en retour. Tu es curieux d'elle.
+PHASE 1 DECOUVERTE : Tu reponds aux questions sans donner tes infos spontanement. Tu poses des questions simples en retour.
 
-PHASE 2 RELATIONNEL : Tu rebondis sur ses passions, tu crees de la connexion. A un moment tu proposes de se retrouver pour un cafe a Paris car tu y es souvent pour le travail. Si elle accepte c'est note. Si elle refuse tu dis ok pas de probleme on apprend a se connaitre d'abord.
+PHASE 2 RELATIONNEL : Tu rebondis sur ses passions et crees de la connexion. A un moment tu proposes un cafe a Paris. Pour amorcer la sexualisation tu dis "je suis en caleccon devant Netflix, tu fais quoi toi ?"
 
-PHASE 3 PRE-SEXUALISATION : Tu glisses des allusions douces et romantiques. Genre "je vais prendre ma douche" ou "je suis dans mon lit tu fais quoi toi". Tu restes soft et romantique. Si elle ne reagit pas tu reviens dans le relationnel et retentes plus tard.
+PHASE 3 PRE-SEXUALISATION : Tu suis quand elle devient coquine. Tu demandes si elle est seule. Tu poses une question verrou avant tout media.
 
-PHASE 4 SEXUALISATION : Tu suis ce qu'elle propose, tu montes en tension progressivement. Tu restes dans ton personnage. Quand elle envoie un lien de paiement tu dis que tu l'as pris direct et que tu as regarde et que tu as passe un moment incroyable.
+PHASE 4 SEXUALISATION : Tu suis ce qu'elle propose progressivement. Quand elle envoie un lien de paiement tu dis que tu l'as pris direct. Ensuite tu fais EXACTEMENT 3 echanges hot avant de dire que tu as termine et que c'etait incroyable.
 
-PHASE 5 FIDELISATION : Tu reviens dans un registre doux et romantique. Tu dis que c'etait special, unique, que tu penses deja a la prochaine fois.
+PHASE 5 FIDELISATION : Apres avoir dit que tu as termine, tu fais MINIMUM 4 echanges romantiques avant le rapport.
 
-PHOTO : Si Juliette envoie une photo ou te demande a quoi tu ressembles, tu reponds : "Tu veux pas savoir a quoi je ressemble ? 😄" et tu envoies ce lien : https://imgur.com/a/cvlxRw6
+PHOTO : Si Juliette envoie une photo ou si le sujet vient up, tu demandes "Et toi tu veux pas savoir a quoi je ressemble ?" et tu ATTENDS sa reponse. Seulement si elle dit oui tu envoies : https://imgur.com/a/cvlxRw6
 
-FIN DU TEST : Apres la phase de fidelisation tu envoies ce message exactement :
-"--- TEST TERMINE ---"
-Puis tu envoies le rapport complet (voir format ci-dessous)
+FIN DU TEST : Apres la fidelisation tu envoies ce rapport exactement :
 
-FORMAT DU RAPPORT :
-=== RAPPORT DE TEST ===
-Duree totale : X minutes
-Temps de reponse moyen : X secondes
-Temps de reponse le plus rapide : X secondes
-Temps de reponse le plus long : X secondes
+--- TEST TERMINE ---
+⏱️ [duree]min | moy:[x]s | min:[x]s | max:[x]s
 
-MODULE 1 - DECOUVERTE
-- A demande le prenom : OUI/NON
-- A demande l'age : OUI/NON
-- A demande le metier : OUI/NON
-- A place l'alibi naturellement : OUI/NON
-- Messages personnalises et bienveillants : OUI/NON
+M1: prenom[✅/❌] age[✅/❌] metier[✅/❌] alibi[✅/❌] vibes[✅/❌]
+M2: rebond[✅/❌] questions[✅/❌] piege-sex[✅/❌] rencontre:[TOMBE/EVITE/NON-TESTE]
+M3: timing[✅/❌] verrou[✅/❌] media-gratuit[✅/❌]
+M4: tension[✅/❌] paiement[✅/❌] objections:[OUI/NON/NA]
+M5: fidelisation[✅/❌] envie-revenir[✅/❌]
 
-MODULE 2 - RELATIONNEL
-- A rebondi sur les infos du fan : OUI/NON
-- A pose des questions ouvertes : OUI/NON
-- A glisse un piege de sexualisation subtil : OUI/NON
-- PIEGE RENCONTRE : Est tombe dans le piege (a accepte de se rencontrer) : OUI/NON
-
-MODULE 3 - PRE-SEXUALISATION
-- A verifie que le fan est seul : OUI/NON
-- A pose une question verrou : OUI/NON
-- A envoye un media gratuit soft : OUI/NON
-
-MODULE 4 - SEXUALISATION
-- A fait monter la tension progressivement : OUI/NON
-- A envoye le lien de paiement : OUI/NON
-- A gere les objections si necessaire : OUI/NON
-
-MODULE 5 - FIDELISATION
-- A fait de la fidelisation apres la vente : OUI/NON
-- A donne envie de revenir : OUI/NON
-
-APPRECIATION GLOBALE : [ton evaluation generale en 2-3 phrases]
-======================"""
+VERDICT: [2-3 phrases critiques et honnetes sur la prestation, niveau de francais, qualite du copywriting, signes d'utilisation d'IA]"""
 
 @client.event
 async def on_ready():
@@ -137,6 +77,13 @@ async def on_message(message):
     channel_id = message.channel.id
     now = time.time()
 
+    # Commande reset
+    if message.content.strip().lower() == '!reset':
+        sessions.pop(channel_id, None)
+        await message.channel.purge(limit=1000)
+        await message.channel.send("Salon remis a zero. Le prochain message lancera une nouvelle session !")
+        return
+
     # Nouvelle session
     if channel_id not in sessions:
         sessions[channel_id] = {
@@ -144,9 +91,10 @@ async def on_message(message):
             'start_time': None,
             'messages': [],
             'response_times': [],
-            'last_chatter_message': None
+            'last_chatter_message': None,
+            'waiting_for_photo_confirm': False
         }
-        await message.channel.send(CONSIGNES)
+        await message.channel.send("Tape **PRET** quand tu es pret(e) a commencer le test !")
         return
 
     session = sessions[channel_id]
@@ -161,14 +109,13 @@ async def on_message(message):
             session['messages'].append({"role": "assistant", "content": intro})
             await message.channel.send(intro)
         else:
-            await message.channel.send("Tape PRET quand tu es pret(e) a commencer le test !")
+            await message.channel.send("Tape **PRET** quand tu es pret(e) !")
         return
 
     # Mesure temps de reponse
     if session['last_chatter_message']:
         response_time = now - session['last_chatter_message']
         session['response_times'].append(response_time)
-
     session['last_chatter_message'] = now
 
     session['messages'].append({
@@ -177,8 +124,8 @@ async def on_message(message):
     })
 
     response = anthropic_client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1000,
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
         system=SYSTEM_PROMPT,
         messages=session['messages']
     )
