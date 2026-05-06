@@ -171,14 +171,14 @@ async def on_message(message):
 
     session = sessions[channel_id]
 
-    # ETAPE 1 : collecte du prenom
+    # ETAPE 1 : prenom
     if not session['prenom']:
         session['prenom'] = message.content.strip()
         save_sessions(sessions)
         await message.channel.send(f"Bonjour **{session['prenom']}** 👋 Quand tu es pret(e), tape **PRET** pour demarrer !")
         return
 
-    # ETAPE 2 : attente du PRET
+    # ETAPE 2 : PRET
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -193,6 +193,7 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
+    # COMMANDES MEDIA
     if cmd == '!soft':
         session['soft_done'] = True
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
@@ -231,6 +232,7 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
+    # MESURE TEMPS
     if session['last_chatter_message']:
         session['response_times'].append(now - session['last_chatter_message'])
     session['last_chatter_message'] = now
@@ -240,7 +242,7 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # POST LIEN
+    # POST LIEN - 3 echanges puis fin
     if session['lien_done'] and not session['fini_sent']:
         session['post_lien_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
@@ -347,9 +349,20 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
+    # PHASE 3 : demande lingerie si tard
     if phase == 3 and exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
         session['asked_lingerie'] = True
         extra_context = "\n[Le chatter tarde. Demande si elle a une photo en lingerie a te montrer, tu veux voir plus]"
+
+    # PHASE 4 : insiste pour le lien si tard
+    if phase == 4 and not session['lien_done']:
+        if exchanges == 5:
+            extra_context = "\n[Le chatter tarde a envoyer le lien. Dis que tu veux vraiment voir la video, que tu penses qu a ca, insiste naturellement]"
+        elif exchanges >= 8:
+            lien_msg = "Tu m envoies le lien alors ? J en peux plus d attendre 🔥"
+            await send_bot(message.channel, session, lien_msg)
+            save_sessions(sessions)
+            return
 
     if len(session['messages']) >= 120:
         await end_test(message.channel, session, channel_id)
