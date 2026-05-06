@@ -114,7 +114,7 @@ async def on_message(message):
             session['messages'].append({"role": "assistant", "content": intro})
             await message.channel.send(intro)
         else:
-            await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
+            await message.channel.send("Salon remis à zéro 🔄\n\nBonjour👋\nPour passer le test, remonte lire les consignes épinglées en haut ⬆️\nPuis tape **PRET** pour démarrer !")
         return
 
     if session['last_chatter_message']:
