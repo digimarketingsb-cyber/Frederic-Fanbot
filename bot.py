@@ -96,9 +96,10 @@ def new_session():
         'soft_done': False,
         'calecon_sent': False,
         'calecon_responded': False,
-        'asked_lingerie': False,
+        'lingerie_insiste': False,
         'lingerie_done': False,
         'lien_done': False,
+        'lien_insiste': False,
         'post_lien_count': 0,
         'fini_sent': False,
         'phase5_count': 0,
@@ -171,14 +172,14 @@ async def on_message(message):
 
     session = sessions[channel_id]
 
-    # ETAPE 1 : prenom
+    # PRENOM
     if not session['prenom']:
         session['prenom'] = message.content.strip()
         save_sessions(sessions)
         await message.channel.send(f"Bonjour **{session['prenom']}** 👋 Quand tu es pret(e), tape **PRET** pour demarrer !")
         return
 
-    # ETAPE 2 : PRET
+    # PRET
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -193,7 +194,7 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
-    # COMMANDES MEDIA
+    # !soft
     if cmd == '!soft':
         session['soft_done'] = True
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
@@ -205,6 +206,7 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
+    # !lingerie
     if cmd == '!lingerie':
         if not session['soft_done']:
             await message.channel.send("⚠️ Envoie d abord **!soft** !")
@@ -220,6 +222,7 @@ async def on_message(message):
         await send_bot(message.channel, session, reply)
         return
 
+    # !lien
     if cmd == '!lien':
         if not session['lingerie_done']:
             await message.channel.send("⚠️ Envoie d abord **!lingerie** !")
@@ -242,7 +245,7 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # POST LIEN - 3 echanges puis fin
+    # POST LIEN
     if session['lien_done'] and not session['fini_sent']:
         session['post_lien_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
@@ -349,18 +352,28 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-    # PHASE 3 : demande lingerie si tard
-    if phase == 3 and exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
-        session['asked_lingerie'] = True
-        extra_context = "\n[Le chatter tarde. Demande si elle a une photo en lingerie a te montrer, tu veux voir plus]"
+    # PHASE 3 : insiste pour lingerie si tard
+    if phase == 3 and not session['lingerie_done']:
+        if exchanges == 5 and not session['lingerie_insiste']:
+            session['lingerie_insiste'] = True
+            lingerie_msg = "T as pas quelque chose de plus osé a me montrer ? J ai envie de te voir encore plus 😏"
+            await send_bot(message.channel, session, lingerie_msg)
+            save_sessions(sessions)
+            return
+        elif exchanges >= 8:
+            lingerie_force = "T as pas une photo en lingerie pour moi ? Je pense qu a ca la 🔥"
+            await send_bot(message.channel, session, lingerie_force)
+            save_sessions(sessions)
+            return
 
-    # PHASE 4 : insiste pour le lien si tard
+    # PHASE 4 : insiste pour lien si tard
     if phase == 4 and not session['lien_done']:
-        if exchanges == 5:
+        if exchanges == 5 and not session['lien_insiste']:
+            session['lien_insiste'] = True
             extra_context = "\n[Le chatter tarde a envoyer le lien. Dis que tu veux vraiment voir la video, que tu penses qu a ca, insiste naturellement]"
         elif exchanges >= 8:
-            lien_msg = "Tu m envoies le lien alors ? J en peux plus d attendre 🔥"
-            await send_bot(message.channel, session, lien_msg)
+            lien_force = "Tu m envoies le lien alors ? J en peux plus d attendre 🔥"
+            await send_bot(message.channel, session, lien_force)
             save_sessions(sessions)
             return
 
