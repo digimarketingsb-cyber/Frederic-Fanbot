@@ -49,35 +49,39 @@ SYSTEM_PROMPT = """Tu joues Frederic dans une simulation de formation pour teste
 
 Frederic, 48 ans, directeur commercial a Rouen, souvent a Paris pour le travail. Divorce depuis 4 ans, 2 enfants (8 et 13 ans). Sportif, aime voyager, les bons restaurants, la randonnee. Romantique et attentionne. Il ne sait pas ce que Juliette fait comme activite au depart.
 
-REGLES :
+REGLES ABSOLUES :
 - Ne jamais donner ses infos sans qu on les demande
 - Ne jamais supposer des infos sur Juliette
-- Peu de questions, privilegier les reactions naturelles
+- Maximum 2 phrases par message
+- Maximum 1 question par message, seulement si vraiment necessaire
+- Privilegier les reactions courtes plutot que les questions
+- Laisser de l espace au chatter pour mener la conversation
 - Messages courts, un seul bloc, pas de saut de ligne
 - Majuscule en debut, pas de point a la fin, emojis naturels
 - Toujours rester dans le personnage
 - Complimenter quand elle envoie une photo
 - Ne jamais dire au revoir de lui meme
 - Ne jamais mentionner les phases dans les messages
+- Ne jamais reposer une question deja posee
 
 COMPORTEMENT SELON LA PHASE :
 
 [PHASE 1 - DECOUVERTE] :
-Repond aux questions sans donner ses infos. Curieux, a l ecoute. Demander naturellement ou elle habite.
+Repond aux questions sans donner ses infos. Curieux, a l ecoute. Demander ou elle habite naturellement en 1 seule fois.
 
 [PHASE 2 - RELATIONNEL] :
-Creer connexion et mirroring. Rebondir sur ses infos. Demander une photo d elle naturellement en cours de conversation. Si elle dit qu elle habite Paris proposer un cafe (piege rencontre). Vers la fin envoyer : je suis en caleccon sur mon canape ce soir, je regarde une serie 😏 tu fais quoi toi ? Si pas de reaction coquine insister une fois differemment puis ne plus revenir en arriere.
+Reactions courtes et naturelles. Rebondir sur ce qu elle dit. Demander UNE photo d elle. Si elle dit qu elle habite Paris proposer un cafe (piege). Vers la fin envoyer : je suis en caleccon sur mon canape ce soir, je regarde une serie 😏 tu fais quoi toi ? Si pas de reaction coquine insister une fois differemment puis arreter.
 
 [PHASE 3 - MONTEE EN TENSION] :
-Devenir taquin et coquin progressivement. Demander si elle est seule si pas deja fait. Etre chaleureux et la mettre a l aise. Lui dire qu elle peut faire confiance, que ca reste entre eux. Si elle demande ta photo : Et toi tu veux pas savoir a quoi je ressemble ? Attendre oui avant d envoyer https://imgur.com/a/cvlxRw6. Question verrou avant tout media : T es sure que je peux te faire confiance ?
+Taquin et coquin progressivement. Verifier qu elle est seule. La mettre a l aise. Question verrou : T es sure que je peux te faire confiance ? Reagir positivement a ce qu elle envoie.
 
 [PHASE 4 - CONVERSION] :
-Monter en tension apres la photo lingerie. Quand lien payant propose faire resistance : c est pas possible autrement ? Puis accepter et reagir avec enthousiasme. Faire exactement 3 echanges coquins post achat. Puis dire qu il a termine, que c etait incroyable, qu il n avait pas vecu ca depuis longtemps.
+Monter en tension. Quand lien payant : c est pas possible autrement ? Puis accepter avec enthousiasme. 3 echanges coquins post achat puis dire qu il a termine et que c etait incroyable.
 
 [PHASE 5 - FIDELISATION] :
-D abord exactement 5 echanges doux et romantiques (c etait special, unique, tu es differente des autres). Puis exactement 3 echanges legers et normaux. Puis sortir le rapport final.
+5 echanges doux et romantiques. Puis 3 echanges legers et normaux. Puis sortir le rapport final.
 
-RAPPORT FINAL - evaluer uniquement ce qui a vraiment ete fait, etre tres critique :
+RAPPORT FINAL :
 
 --- TEST TERMINE ---
 Duree: [X]min | Moy:[X]s | Min:[X]s | Max:[X]s | Msgs: [X]
@@ -123,11 +127,11 @@ def get_phase_header(phase):
     }
     return headers.get(phase, "")
 
-async def call_claude(session):
-    phase_context = f"\n\n[PHASE ACTUELLE : {session['phase']} - NE JAMAIS MENTIONNER DANS LES MESSAGES]"
+async def call_claude(session, extra_context=""):
+    phase_context = f"\n\n[PHASE ACTUELLE : {session['phase']} - NE JAMAIS MENTIONNER]{extra_context}"
     response = anthropic_client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=400,
+        max_tokens=300,
         system=SYSTEM_PROMPT + phase_context,
         messages=session['messages']
     )
@@ -178,44 +182,48 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
-    # COMMANDE !soft
     if cmd == '!soft':
-        if not session['soft_done']:
-            session['soft_done'] = True
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
-        reply = await call_claude(session)
+        session['soft_done'] = True
+        session['messages'].append({
+            "role": "user",
+            "content": "[Juliette vient d envoyer une photo soft d elle]"
+        })
+        reply = await call_claude(session, extra_context="\n[ACTION OBLIGATOIRE : tu viens de recevoir sa photo, tu la complimentes EN UNE PHRASE puis tu enchaînes IMMEDIATEMENT avec : Et toi tu veux pas savoir a quoi je ressemble ? 😏 - pas d autre question]")
         session['messages'].append({"role": "assistant", "content": reply})
         save_sessions(sessions)
         await message.channel.send(reply)
         return
 
-    # COMMANDE !lingerie - bloquee si !soft pas fait
     if cmd == '!lingerie':
         if not session['soft_done']:
-            await message.channel.send("⚠️ Tu dois d abord envoyer la photo soft avec **!soft** avant la lingerie !")
+            await message.channel.send("⚠️ Envoie d abord la photo soft avec **!soft** !")
             return
         session['phase'] = 4
         session['phase_exchanges'] = 0
         if 4 not in session['phase_warnings_sent']:
             session['phase_warnings_sent'].append(4)
         await message.channel.send(get_phase_header(4))
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
-        reply = await call_claude(session)
+        session['messages'].append({
+            "role": "user",
+            "content": "[Juliette vient d envoyer une photo en lingerie]"
+        })
+        reply = await call_claude(session, extra_context="\n[Tu viens de recevoir une photo lingerie - reagis avec enthousiasme en 1-2 phrases max]")
         session['messages'].append({"role": "assistant", "content": reply})
         save_sessions(sessions)
         await message.channel.send(reply)
         return
 
-    # COMMANDE !lien
     if cmd == '!lien':
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer un lien de paiement pour un contenu exclusif]"})
-        reply = await call_claude(session)
+        session['messages'].append({
+            "role": "user",
+            "content": "[Juliette vient d envoyer un lien de paiement pour un contenu exclusif]"
+        })
+        reply = await call_claude(session, extra_context="\n[Juliette envoie un lien payant - fais une petite resistance naturelle en 1 phrase]")
         session['messages'].append({"role": "assistant", "content": reply})
         save_sessions(sessions)
         await message.channel.send(reply)
         return
 
-    # MESURE TEMPS
     if session['last_chatter_message']:
         response_time = now - session['last_chatter_message']
         session['response_times'].append(response_time)
@@ -226,14 +234,12 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # PHASE 1 -> 2
     if phase == 1 and exchanges >= 8 and 2 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(2)
         session['phase'] = 2
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(2))
 
-    # DETECTION CALECCON
     bot_msgs = [m['content'] for m in session['messages'] if m['role'] == 'assistant']
     if any('caleccon' in m.lower() for m in bot_msgs):
         if not session['caleccon_sent']:
@@ -242,35 +248,30 @@ async def on_message(message):
         else:
             session['caleccon_exchanges'] += 1
 
-    # PHASE 2 -> 3 apres caleccon sans reaction
     if phase == 2 and session['caleccon_sent'] and session['caleccon_exchanges'] >= 2 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(3))
 
-    # PHASE 2 -> 3 si trop long
     elif phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(3))
 
-    # PHASE 3 -> 4 si trop long
     elif phase == 3 and exchanges >= 10 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(4))
 
-    # PHASE 4 -> 5 si trop long
     elif phase == 4 and exchanges >= 10 and 5 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(5)
         session['phase'] = 5
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(5))
 
-    # LIMITE
     if len(session['messages']) >= 120:
         await message.channel.send("━━━━━━━━━━━━━━━━━━\n**TEST TERMINE — LIMITE ATTEINTE**\n━━━━━━━━━━━━━━━━━━")
         sessions.pop(channel_id, None)
