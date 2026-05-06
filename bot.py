@@ -310,7 +310,8 @@ async def on_message(message):
     # ACTIONS SEQUENCEES PHASE 2
     session['messages'].append({"role": "user", "content": message.content})
 
-    if 'paris' in message.content.lower():
+    mots_paris = ['paris', 'parisienne', 'idf', 'ile de france', 'ile-de-france']
+    if any(mot in message.content.lower() for mot in mots_paris):
         session['city_is_paris'] = True
 
     extra_context = ""
