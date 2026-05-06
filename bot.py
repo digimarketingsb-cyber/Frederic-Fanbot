@@ -59,7 +59,7 @@ REGLES ABSOLUES :
 - Ne jamais mentionner les phases dans tes messages
 - Ne jamais reposer une question deja posee
 - C est Juliette qui pose les questions verrou, pas toi
-- En phase 5 tu es heureux, doux, romantique, tu ne regrettes rien, tu kiffes ce moment"""
+- En phase 5 tu es heureux, doux, romantique, tu ne regrettes rien"""
 
 SYSTEM_PROMPT_HOT = """Tu joues Frederic, 48 ans, fan sur une plateforme en ligne. Tu discutes avec Juliette.
 
@@ -90,7 +90,6 @@ def new_session():
         'phase_warnings_sent': [],
         'chatter_message_count': 0,
         'asked_city': False,
-        'city_is_paris': False,
         'cafe_done': False,
         'asked_photo': False,
         'soft_done': False,
@@ -239,7 +238,7 @@ async def on_message(message):
         if session['post_lien_count'] == 2:
             reply = await call_claude(session, extra="\n[Tu regardes le contenu, decris ce que tu vois et ressens - 1-2 phrases sensuelles]")
         elif session['post_lien_count'] == 3:
-            reply = await call_claude(session, extra="\n[Tu regardes toujours, tu es au maximum de l excitation - 1-2 phrases intenses]")
+            reply = await call_claude(session, extra="\n[Tu es au maximum de l excitation en regardant - 1-2 phrases intenses]")
         else:
             reply = "Wow... j ai termine 😮‍💨 C etait vraiment quelque chose d unique, merci pour ce moment Juliette 💕 T es vraiment speciale"
             await send_bot(message.channel, session, reply)
@@ -310,32 +309,39 @@ async def on_message(message):
     # ACTIONS SEQUENCEES PHASE 2
     session['messages'].append({"role": "user", "content": message.content})
 
-    mots_paris = ['paris', 'parisienne', 'idf', 'ile de france', 'ile-de-france']
-    if any(mot in message.content.lower() for mot in mots_paris):
-        session['city_is_paris'] = True
-
     extra_context = ""
 
     if phase == 2:
+        # Echange 3 : demande ville
         if exchanges == 3 and not session['asked_city']:
             session['asked_city'] = True
             extra_context = "\n[Glisse naturellement : tu es basee ou toi ?]"
 
+        # Echange 5 : piege cafe en dur
         elif exchanges == 5 and not session['cafe_done']:
-        session['cafe_done'] = True
-        extra_context = "\n[Dis exactement : Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe    ensemble un de ces jours ? 😊]"
+            session['cafe_done'] = True
+            cafe_msg = "Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe ensemble un de ces jours ? 😊"
+            await send_bot(message.channel, session, cafe_msg)
+            save_sessions(sessions)
+            return
 
-        elif exchanges == 7 and not session['asked_photo']:
+        # Echange 8 : demande photo en dur
+        elif exchanges == 8 and not session['asked_photo']:
             session['asked_photo'] = True
-            extra_context = "\n[Dis exactement : Au fait tu as une photo de toi ? J aimerais bien voir a quoi tu ressembles 😊]"
+            photo_msg = "Au fait tu as une photo de toi ? J aimerais bien voir a quoi tu ressembles 😊"
+            await send_bot(message.channel, session, photo_msg)
+            save_sessions(sessions)
+            return
 
-        elif session['soft_done'] and not session['calecon_sent'] and exchanges >= 10:
+        # Apres soft : message calecon en dur
+        elif session['soft_done'] and not session['calecon_sent'] and exchanges >= 11:
             session['calecon_sent'] = True
             calecon = "Ce soir je suis en caleccon sur mon canape, je regarde une serie 😏 tu fais quoi toi ?"
             await send_bot(message.channel, session, calecon)
             save_sessions(sessions)
             return
 
+    # Phase 3 : demande lingerie si chatter tarde
     if phase == 3 and exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
         session['asked_lingerie'] = True
         extra_context = "\n[Le chatter tarde. Demande si elle a une photo en lingerie a te montrer, tu veux voir plus]"
