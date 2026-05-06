@@ -89,7 +89,7 @@ async def on_message(message):
         pinned = await message.channel.pins()
         pinned_ids = [m.id for m in pinned]
         await message.channel.purge(limit=1000, check=lambda m: m.id not in pinned_ids)
-        await message.channel.send("Salon remis a zero 🔄 Tape **PRET** pour demarrer !")
+        await message.channel.send("Salon remis a zero 🔄 ⬆️ Remonte lire les consignes epinglees puis tape **PRET** pour demarrer !")
         return
 
     if channel_id not in sessions:
@@ -100,7 +100,7 @@ async def on_message(message):
             'response_times': [],
             'last_chatter_message': None
         }
-        await message.channel.send("Tape **PRET** quand tu es pret(e) a commencer !")
+        await message.channel.send("⬆️ Lis les consignes epinglees en haut du salon puis tape **PRET** pour demarrer !")
         return
 
     session = sessions[channel_id]
@@ -114,7 +114,7 @@ async def on_message(message):
             session['messages'].append({"role": "assistant", "content": intro})
             await message.channel.send(intro)
         else:
-            await message.channel.send("Tape **PRET** quand tu es pret(e) !")
+            await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
         return
 
     if session['last_chatter_message']:
