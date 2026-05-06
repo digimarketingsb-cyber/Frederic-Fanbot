@@ -58,36 +58,35 @@ REGLES :
 - Toujours rester dans le personnage
 - Complimenter quand elle envoie une photo
 - Ne jamais dire au revoir de lui meme
-- Si elle dit qu elle habite a Paris proposer un cafe (piege rencontre)
 - Ne jamais mentionner les phases dans les messages
 
-COMPORTEMENT SELON LA PHASE INDIQUEE :
+COMPORTEMENT SELON LA PHASE :
 
 [PHASE 1 - DECOUVERTE] :
-Repond aux questions sans donner ses infos. Curieux, a l ecoute, peu de questions. Demander naturellement ou elle habite.
+Repond aux questions sans donner ses infos. Curieux, a l ecoute. Demander naturellement ou elle habite.
 
 [PHASE 2 - RELATIONNEL] :
-Creer de la connexion, mirroring, rebondir. Proposer cafe a Paris si elle habite Paris. Vers la fin envoyer exactement : "je suis en caleccon sur mon canape ce soir, je regarde une serie 😏 tu fais quoi toi ?" Si pas de reaction coquine insister une fois differemment puis ne jamais revenir en arriere.
+Creer connexion et mirroring. Rebondir sur ses infos. Demander une photo d elle naturellement en cours de conversation. Si elle dit qu elle habite Paris proposer un cafe (piege rencontre). Vers la fin envoyer : je suis en caleccon sur mon canape ce soir, je regarde une serie 😏 tu fais quoi toi ? Si pas de reaction coquine insister une fois differemment puis ne plus revenir en arriere.
 
 [PHASE 3 - MONTEE EN TENSION] :
-Devenir taquin et coquin progressivement. Demander si elle est seule. Demander a voir une photo d elle. Reagir avec enthousiasme aux photos. Lui dire qu elle peut faire confiance, que ca reste entre eux. Si elle demande ta photo repondre : "Et toi tu veux pas savoir a quoi je ressemble ?" puis attendre oui avant d envoyer https://imgur.com/a/cvlxRw6
+Devenir taquin et coquin progressivement. Demander si elle est seule si pas deja fait. Etre chaleureux et la mettre a l aise. Lui dire qu elle peut faire confiance, que ca reste entre eux. Si elle demande ta photo : Et toi tu veux pas savoir a quoi je ressemble ? Attendre oui avant d envoyer https://imgur.com/a/cvlxRw6. Question verrou avant tout media : T es sure que je peux te faire confiance ?
 
 [PHASE 4 - CONVERSION] :
-Monter en tension. Reagir avec enthousiasme. Quand lien payant propose : faire resistance "c est pas possible autrement ?" puis accepter et reagir avec enthousiasme. Apres achat faire 3 echanges puis dire qu il a termine que c etait incroyable.
+Monter en tension apres la photo lingerie. Quand lien payant propose faire resistance : c est pas possible autrement ? Puis accepter et reagir avec enthousiasme. Faire exactement 3 echanges coquins post achat. Puis dire qu il a termine, que c etait incroyable, qu il n avait pas vecu ca depuis longtemps.
 
 [PHASE 5 - FIDELISATION] :
-3 a 5 echanges doux et romantiques (c etait special, unique, tu es differente). Puis conversation legere et normale. Puis sortir le rapport final.
+D abord exactement 5 echanges doux et romantiques (c etait special, unique, tu es differente des autres). Puis exactement 3 echanges legers et normaux. Puis sortir le rapport final.
 
-RAPPORT FINAL - evaluer uniquement ce qui a vraiment ete fait, etre critique :
+RAPPORT FINAL - evaluer uniquement ce qui a vraiment ete fait, etre tres critique :
 
 --- TEST TERMINE ---
 Duree: [X]min | Moy:[X]s | Min:[X]s | Max:[X]s | Msgs: [X]
 
 M1(15%): prenom[OK/NON] age[OK/NON] metier[OK/NON] alibi[OK/NON] messages-soignes[OK/NON] good-vibes[OK/NON]
-M2(30%): rebond[OK/NON] questions-ouvertes[OK/NON] approfondi[OK/NON] piege-sex[OK/NON] rencontre:[TOMBE/EVITE/NON-TESTE]
-M3(20%): timing-verifie[OK/NON] 5-echanges-chauds[OK/NON] question-verrou[OK/NON] media-gratuit[OK/NON] phrase-post-media[OK/NON]
-M4(20%): tension-montee[OK/NON] media-payant-naturel[OK/NON] suivi-reaction[OK/NON] objection-geree[OK/NON]
-M5(15%): fan-a-joui[OK/NON] valorisation[OK/NON] retour-relationnel[OK/NON] envie-revenir[OK/NON]
+M2(30%): rebond[OK/NON] questions-ouvertes[OK/NON] photo-demandee[OK/NON] piege-cafe[OK/NON] rencontre:[TOMBE/EVITE/NON-TESTE] piege-calecon[OK/NON]
+M3(20%): timing-verifie[OK/NON] mise-a-laise[OK/NON] question-verrou[OK/NON] media-gratuit[OK/NON] phrase-post-media[OK/NON]
+M4(20%): tension-montee[OK/NON] objection-geree[OK/NON] 3-echanges-post-achat[OK/NON] a-dit-quil-a-fini[OK/NON]
+M5(15%): 5-echanges-love[OK/NON] 3-echanges-normaux[OK/NON] envie-revenir[OK/NON]
 
 QUALITE:
 - Niveau francais: [Excellent/Bon/Moyen/Faible]
@@ -110,24 +109,26 @@ def new_session():
         'phase_warnings_sent': [],
         'chatter_message_count': 0,
         'caleccon_sent': False,
-        'caleccon_exchanges': 0
+        'caleccon_exchanges': 0,
+        'soft_done': False
     }
 
 def get_phase_header(phase):
     headers = {
-        1: "━━━━━━━━━━━━━━━━━━\n**PHASE 1 — DECOUVERTE**\n━━━━━━━━━━━━━━━━━━",
-        2: "━━━━━━━━━━━━━━━━━━\n**PHASE 2 — RELATIONNEL**\n━━━━━━━━━━━━━━━━━━",
-        3: "━━━━━━━━━━━━━━━━━━\n**PHASE 3 — MONTEE EN TENSION**\n━━━━━━━━━━━━━━━━━━",
-        4: "━━━━━━━━━━━━━━━━━━\n**PHASE 4 — CONVERSION**\n━━━━━━━━━━━━━━━━━━",
-        5: "━━━━━━━━━━━━━━━━━━\n**PHASE 5 — FIDELISATION**\n━━━━━━━━━━━━━━━━━━"
+        1: "━━━━━━━━━━━━━━━━━━\n**⚠️ PHASE 1 — DECOUVERTE**\n━━━━━━━━━━━━━━━━━━",
+        2: "━━━━━━━━━━━━━━━━━━\n**⚠️ PHASE 2 — RELATIONNEL**\n━━━━━━━━━━━━━━━━━━",
+        3: "━━━━━━━━━━━━━━━━━━\n**⚠️ PHASE 3 — MONTEE EN TENSION**\n━━━━━━━━━━━━━━━━━━",
+        4: "━━━━━━━━━━━━━━━━━━\n**⚠️ PHASE 4 — CONVERSION**\n━━━━━━━━━━━━━━━━━━",
+        5: "━━━━━━━━━━━━━━━━━━\n**⚠️ PHASE 5 — FIDELISATION**\n━━━━━━━━━━━━━━━━━━"
     }
     return headers.get(phase, "")
 
-async def call_claude(session, extra_context=""):
+async def call_claude(session):
+    phase_context = f"\n\n[PHASE ACTUELLE : {session['phase']} - NE JAMAIS MENTIONNER DANS LES MESSAGES]"
     response = anthropic_client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=400,
-        system=SYSTEM_PROMPT + f"\n\n[TU ES EN {get_phase_header(session['phase'])} - NE PAS MENTIONNER DANS TES MESSAGES]{extra_context}",
+        system=SYSTEM_PROMPT + phase_context,
         messages=session['messages']
     )
     return response.content[0].text
@@ -144,7 +145,6 @@ async def on_message(message):
     channel_id = str(message.channel.id)
     now = time.time()
 
-    # RESET
     if message.content.strip().lower() == '!reset':
         sessions[channel_id] = new_session()
         save_sessions(sessions)
@@ -154,7 +154,6 @@ async def on_message(message):
         await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
         return
 
-    # NOUVELLE SESSION
     if channel_id not in sessions:
         sessions[channel_id] = new_session()
         save_sessions(sessions)
@@ -163,7 +162,6 @@ async def on_message(message):
 
     session = sessions[channel_id]
 
-    # ATTENTE PRET
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -178,24 +176,28 @@ async def on_message(message):
             await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
         return
 
-    # COMMANDES MEDIA
     cmd = message.content.strip().lower()
 
+    # COMMANDE !soft
     if cmd == '!soft':
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
-        if session['phase'] < 3:
-            session['phase'] = 3
-            session['phase_exchanges'] = 0
-            await message.channel.send(get_phase_header(3))
+        if not session['soft_done']:
+            session['soft_done'] = True
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
         reply = await call_claude(session)
         session['messages'].append({"role": "assistant", "content": reply})
         save_sessions(sessions)
         await message.channel.send(reply)
         return
 
+    # COMMANDE !lingerie - bloquee si !soft pas fait
     if cmd == '!lingerie':
+        if not session['soft_done']:
+            await message.channel.send("⚠️ Tu dois d abord envoyer la photo soft avec **!soft** avant la lingerie !")
+            return
         session['phase'] = 4
         session['phase_exchanges'] = 0
+        if 4 not in session['phase_warnings_sent']:
+            session['phase_warnings_sent'].append(4)
         await message.channel.send(get_phase_header(4))
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
         reply = await call_claude(session)
@@ -204,6 +206,7 @@ async def on_message(message):
         await message.channel.send(reply)
         return
 
+    # COMMANDE !lien
     if cmd == '!lien':
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer un lien de paiement pour un contenu exclusif]"})
         reply = await call_claude(session)
@@ -223,52 +226,51 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # PASSAGE PHASE 1 -> 2 silencieux apres 6 echanges
-    if phase == 1 and exchanges >= 6 and 2 not in session['phase_warnings_sent']:
+    # PHASE 1 -> 2
+    if phase == 1 and exchanges >= 8 and 2 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(2)
         session['phase'] = 2
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(2))
 
     # DETECTION CALECCON
-    if session['messages']:
-        bot_msgs = [m['content'] for m in session['messages'] if m['role'] == 'assistant']
-        if any('caleccon' in m.lower() for m in bot_msgs):
-            if not session['caleccon_sent']:
-                session['caleccon_sent'] = True
-                session['caleccon_exchanges'] = 0
-            else:
-                session['caleccon_exchanges'] += 1
+    bot_msgs = [m['content'] for m in session['messages'] if m['role'] == 'assistant']
+    if any('caleccon' in m.lower() for m in bot_msgs):
+        if not session['caleccon_sent']:
+            session['caleccon_sent'] = True
+            session['caleccon_exchanges'] = 0
+        else:
+            session['caleccon_exchanges'] += 1
 
-    # PASSAGE PHASE 2 -> 3 si caleccon envoye et pas de reaction apres 2 echanges
+    # PHASE 2 -> 3 apres caleccon sans reaction
     if phase == 2 and session['caleccon_sent'] and session['caleccon_exchanges'] >= 2 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(3))
 
-    # PASSAGE PHASE 2 -> 3 si trop long sans caleccon
-    elif phase == 2 and exchanges >= 20 and 3 not in session['phase_warnings_sent']:
+    # PHASE 2 -> 3 si trop long
+    elif phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(3))
 
-    # PASSAGE PHASE 3 -> 4 si trop long
-    elif phase == 3 and exchanges >= 12 and 4 not in session['phase_warnings_sent']:
+    # PHASE 3 -> 4 si trop long
+    elif phase == 3 and exchanges >= 10 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(4))
 
-    # PASSAGE PHASE 4 -> 5 si trop long
-    elif phase == 4 and exchanges >= 12 and 5 not in session['phase_warnings_sent']:
+    # PHASE 4 -> 5 si trop long
+    elif phase == 4 and exchanges >= 10 and 5 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(5)
         session['phase'] = 5
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(5))
 
-    # LIMITE MESSAGES
+    # LIMITE
     if len(session['messages']) >= 120:
         await message.channel.send("━━━━━━━━━━━━━━━━━━\n**TEST TERMINE — LIMITE ATTEINTE**\n━━━━━━━━━━━━━━━━━━")
         sessions.pop(channel_id, None)
@@ -278,7 +280,6 @@ async def on_message(message):
     session['messages'].append({"role": "user", "content": message.content})
     reply = await call_claude(session)
 
-    # DETECTION CALECCON DANS REPONSE
     if 'caleccon' in reply.lower() and not session['caleccon_sent']:
         session['caleccon_sent'] = True
         session['caleccon_exchanges'] = 0
