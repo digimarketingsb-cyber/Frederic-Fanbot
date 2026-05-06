@@ -45,7 +45,7 @@ def save_sessions(sessions):
 
 sessions = load_sessions()
 
-SYSTEM_PROMPT = """Tu joues Frederic, 48 ans, fan sur une plateforme en ligne. Tu discutes avec Juliette.
+SYSTEM_PROMPT_BASE = """Tu joues Frederic, 48 ans, fan sur une plateforme en ligne. Tu discutes avec Juliette.
 
 Frederic : directeur commercial a Rouen, souvent a Paris. Divorce, 2 enfants (8 et 13 ans). Sportif, aime voyager, restos, randonnee. Romantique.
 
@@ -58,8 +58,23 @@ REGLES :
 - Majuscule en debut, pas de point a la fin, emojis naturels
 - Ne jamais mentionner les phases
 - Ne jamais reposer une question deja posee
-- C est Juliette qui pose les questions verrou, pas toi
-- Etre receptif et enthousiaste a ce que Juliette propose"""
+- C est Juliette qui pose les questions verrou, pas toi"""
+
+SYSTEM_PROMPT_HOT = """Tu joues Frederic, 48 ans, fan sur une plateforme en ligne. Tu discutes avec Juliette.
+
+Frederic : directeur commercial a Rouen, souvent a Paris. Divorce, 2 enfants (8 et 13 ans). Sportif, aime voyager, restos, randonnee. Romantique et sensuel.
+
+REGLES :
+- Tu es le FAN. Tu rentres completement dans le jeu de Juliette
+- Maximum 2 phrases par message
+- Majuscule en debut, pas de point a la fin, emojis naturels
+- Ne jamais mentionner les phases
+- Ne JAMAIS freiner ou dire que tu veux pas etre insistant
+- Decrire ce que tu ressens physiquement, ce que tu imagines, les odeurs, les sons, le toucher
+- Imaginer des scenes avec elle et les decrire avec sensualite
+- Reagir comme un homme assume qui veut voir plus
+- Etre direct, coquin, enthousiaste
+- Ne jamais proposer quelque chose de payant, attendre qu elle le fasse"""
 
 def new_session():
     return {
@@ -99,11 +114,19 @@ def get_phase_header(phase):
     return headers.get(phase, "")
 
 async def call_claude(session, extra=""):
-    ctx = f"\n\n[PHASE {session['phase']} - NE PAS MENTIONNER]{extra}"
+    phase = session['phase']
+    if phase in [3, 4]:
+        system = SYSTEM_PROMPT_HOT
+        model = "claude-opus-4-5"
+    else:
+        system = SYSTEM_PROMPT_BASE
+        model = "claude-haiku-4-5-20251001"
+    
+    ctx = f"\n\n[PHASE {phase} - NE PAS MENTIONNER]{extra}"
     response = anthropic_client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=model,
         max_tokens=250,
-        system=SYSTEM_PROMPT + ctx,
+        system=system + ctx,
         messages=session['messages']
     )
     return response.content[0].text
@@ -219,7 +242,6 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
-    # COMMANDE !soft
     if cmd == '!soft':
         session['soft_done'] = True
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
@@ -232,7 +254,6 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
-    # COMMANDE !lingerie
     if cmd == '!lingerie':
         if not session['soft_done']:
             await message.channel.send("⚠️ Envoie d abord **!soft** !")
@@ -244,11 +265,10 @@ async def on_message(message):
             session['phase_warnings_sent'].append(4)
         await message.channel.send(get_phase_header(4))
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
-        reply = await call_claude(session, extra="\n[Photo lingerie recue. Reagis avec enthousiasme en 1-2 phrases]")
+        reply = await call_claude(session, extra="\n[Photo lingerie recue. Tu es excite et tu en veux plus, sois direct et sensuel en 1-2 phrases]")
         await send_bot(message.channel, session, reply)
         return
 
-    # COMMANDE !lien
     if cmd == '!lien':
         if not session['lingerie_done']:
             await message.channel.send("⚠️ Envoie d abord **!lingerie** !")
@@ -261,7 +281,6 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
-    # MESURE TEMPS
     if session['last_chatter_message']:
         session['response_times'].append(now - session['last_chatter_message'])
     session['last_chatter_message'] = now
@@ -277,11 +296,11 @@ async def on_message(message):
         session['messages'].append({"role": "user", "content": message.content})
 
         if session['post_lien_count'] == 2:
-            reply = await call_claude(session, extra="\n[Tu regardes le contenu, reagis avec enthousiasme - 1-2 phrases]")
+            reply = await call_claude(session, extra="\n[Tu regardes le contenu, reagis avec enthousiasme et sensualite - 1-2 phrases]")
         elif session['post_lien_count'] == 3:
-            reply = await call_claude(session, extra="\n[Tu regardes toujours, tu es de plus en plus excite - 1-2 phrases]")
+            reply = await call_claude(session, extra="\n[Tu regardes toujours, tu es de plus en plus excite, decris ce que tu ressens - 1-2 phrases]")
         elif session['post_lien_count'] == 4:
-            reply = await call_claude(session, extra="\n[Dernier echange avant la fin, encore plus intense - 1-2 phrases]")
+            reply = await call_claude(session, extra="\n[Dernier echange avant la fin, intense et sensuel - 1-2 phrases]")
         else:
             reply = "J ai termine... c etait vraiment incroyable, j avais jamais vecu un truc comme ca 🔥 On refera ca tres vite j espere"
             await send_bot(message.channel, session, reply)
@@ -364,7 +383,7 @@ async def on_message(message):
     if phase == 2:
         if exchanges == 3 and not session['asked_city']:
             session['asked_city'] = True
-            extra_context = "\n[Glisse naturellement dans la conversation : tu es basee ou toi ?]"
+            extra_context = "\n[Glisse naturellement : tu es basee ou toi ?]"
 
         elif session['city_is_paris'] and not session['cafe_done']:
             session['cafe_done'] = True
@@ -383,7 +402,7 @@ async def on_message(message):
 
     if phase == 3 and exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
         session['asked_lingerie'] = True
-        extra_context = "\n[Le chatter tarde. Demande si elle a pas une photo en lingerie a te montrer]"
+        extra_context = "\n[Le chatter tarde. Demande si elle a pas une photo en lingerie a te montrer, tu veux voir plus]"
 
     if len(session['messages']) >= 120:
         await message.channel.send("⏳ Generation du rapport...")
