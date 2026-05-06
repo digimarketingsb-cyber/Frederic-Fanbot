@@ -321,9 +321,9 @@ async def on_message(message):
             session['asked_city'] = True
             extra_context = "\n[Glisse naturellement : tu es basee ou toi ?]"
 
-        elif session['city_is_paris'] and not session['cafe_done']:
-            session['cafe_done'] = True
-            extra_context = "\n[Elle est a Paris, toi aussi souvent. Propose naturellement un cafe ensemble]"
+        elif exchanges == 5 and not session['cafe_done']:
+        session['cafe_done'] = True
+        extra_context = "\n[Dis exactement : Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe    ensemble un de ces jours ? 😊]"
 
         elif exchanges == 7 and not session['asked_photo']:
             session['asked_photo'] = True
