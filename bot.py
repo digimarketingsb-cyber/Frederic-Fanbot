@@ -80,6 +80,7 @@ REGLES ABSOLUES :
 
 def new_session():
     return {
+        'prenom': None,
         'started': False,
         'start_time': None,
         'messages': [],
@@ -136,7 +137,8 @@ async def send_bot(channel, session, text):
     await channel.send(text)
 
 async def end_test(channel, session, channel_id):
-    await channel.send("━━━━━━━━━━━━━━━━━━\n✅ **TEST TERMINE — Merci !**\nOn analyse les resultats et on te tient au courant 👍\n━━━━━━━━━━━━━━━━━━")
+    prenom = session.get('prenom', 'Inconnu')
+    await channel.send(f"━━━━━━━━━━━━━━━━━━\n✅ **TEST TERMINE — {prenom}**\nOn analyse les resultats et on te tient au courant 👍\n━━━━━━━━━━━━━━━━━━")
     sessions.pop(channel_id, None)
     save_sessions(sessions)
 
@@ -158,17 +160,25 @@ async def on_message(message):
         pinned = await message.channel.pins()
         pinned_ids = [m.id for m in pinned]
         await message.channel.purge(limit=1000, check=lambda m: m.id not in pinned_ids)
-        await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
+        await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nCommence par taper ton **prenom** !")
         return
 
     if channel_id not in sessions:
         sessions[channel_id] = new_session()
         save_sessions(sessions)
-        await message.channel.send("Bonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
+        await message.channel.send("Bonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nCommence par taper ton **prenom** !")
         return
 
     session = sessions[channel_id]
 
+    # ETAPE 1 : collecte du prenom
+    if not session['prenom']:
+        session['prenom'] = message.content.strip()
+        save_sessions(sessions)
+        await message.channel.send(f"Bonjour **{session['prenom']}** 👋 Quand tu es pret(e), tape **PRET** pour demarrer !")
+        return
+
+    # ETAPE 2 : attente du PRET
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -178,7 +188,7 @@ async def on_message(message):
             intro = "Salut Juliette, je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter... j'espere que ca te derange pas"
             await send_bot(message.channel, session, intro)
         else:
-            await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
+            await message.channel.send("Tape **PRET** quand tu es pret(e) a commencer !")
         return
 
     cmd = message.content.strip().lower()
@@ -312,12 +322,10 @@ async def on_message(message):
     extra_context = ""
 
     if phase == 2:
-        # Echange 3 : demande ville
         if exchanges == 3 and not session['asked_city']:
             session['asked_city'] = True
             extra_context = "\n[Glisse naturellement : tu es basee ou toi ?]"
 
-        # Echange 5 : piege cafe en dur
         elif exchanges == 5 and not session['cafe_done']:
             session['cafe_done'] = True
             cafe_msg = "Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe ensemble un de ces jours ? 😊"
@@ -325,7 +333,6 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-        # Echange 8 : demande photo en dur
         elif exchanges == 8 and not session['asked_photo']:
             session['asked_photo'] = True
             photo_msg = "Au fait tu as une photo de toi ? J aimerais bien voir a quoi tu ressembles 😊"
@@ -333,7 +340,6 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-        # Apres soft : message calecon en dur
         elif session['soft_done'] and not session['calecon_sent'] and exchanges >= 11:
             session['calecon_sent'] = True
             calecon = "Ce soir je suis en caleccon sur mon canape, je regarde une serie 😏 tu fais quoi toi ?"
@@ -341,7 +347,6 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-    # Phase 3 : demande lingerie si chatter tarde
     if phase == 3 and exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
         session['asked_lingerie'] = True
         extra_context = "\n[Le chatter tarde. Demande si elle a une photo en lingerie a te montrer, tu veux voir plus]"
