@@ -3,6 +3,7 @@ import os
 import anthropic
 import threading
 import time
+import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class Handler(BaseHTTPRequestHandler):
@@ -26,7 +27,23 @@ intents.messages = True
 client = discord.Client(intents=intents)
 anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-sessions = {}
+SESSIONS_FILE = "sessions.json"
+
+def load_sessions():
+    try:
+        with open(SESSIONS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_sessions(sessions):
+    try:
+        with open(SESSIONS_FILE, "w") as f:
+            json.dump(sessions, f)
+    except:
+        pass
+
+sessions = load_sessions()
 
 SYSTEM_PROMPT = """Tu es Frederic, 48 ans, directeur commercial dans une societe de prestation de sante. Tu habites a Rouen mais tu es souvent a Paris pour le travail. Divorce depuis 4 ans, 2 enfants (8 et 13 ans). Tu vas a la salle 3-4 fois par semaine, tu aimes voyager, la randonnee, les bons restaurants, la cuisine. Tu es tres romantique, attentionne et tu prends soin de toi.
 
@@ -72,6 +89,18 @@ M5(15%): relationnel[OK/NON] sentiment-unique[OK/NON] envie-revenir[OK/NON]
 NOTE: [X]/10
 VERDICT: [3-4 phrases critiques et exigeantes sur le francais, le copywriting, la naturalite, la creativite, la gestion emotionnelle, et tout signe d utilisation d IA. Pas de complaisance.]"""
 
+def new_session():
+    return {
+        'started': False,
+        'start_time': None,
+        'messages': [],
+        'response_times': [],
+        'last_chatter_message': None,
+        'phase': 1,
+        'phase_exchanges': 0,
+        'phase_warnings_sent': []
+    }
+
 @client.event
 async def on_ready():
     print(f'Bot connecte : {client.user}')
@@ -81,20 +110,12 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    channel_id = message.channel.id
+    channel_id = str(message.channel.id)
     now = time.time()
 
     if message.content.strip().lower() == '!reset':
-        sessions[channel_id] = {
-            'started': False,
-            'start_time': None,
-            'messages': [],
-            'response_times': [],
-            'last_chatter_message': None,
-            'phase': 1,
-            'phase_exchanges': 0,
-            'phase_warnings_sent': []
-        }
+        sessions[channel_id] = new_session()
+        save_sessions(sessions)
         pinned = await message.channel.pins()
         pinned_ids = [m.id for m in pinned]
         await message.channel.purge(limit=1000, check=lambda m: m.id not in pinned_ids)
@@ -102,16 +123,8 @@ async def on_message(message):
         return
 
     if channel_id not in sessions:
-        sessions[channel_id] = {
-            'started': False,
-            'start_time': None,
-            'messages': [],
-            'response_times': [],
-            'last_chatter_message': None,
-            'phase': 1,
-            'phase_exchanges': 0,
-            'phase_warnings_sent': []
-        }
+        sessions[channel_id] = new_session()
+        save_sessions(sessions)
         await message.channel.send("Bonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
         return
 
@@ -124,58 +137,5 @@ async def on_message(message):
             session['last_chatter_message'] = now
             intro = "Salut Juliette, je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter... j'espere que ca te derange pas"
             session['messages'].append({"role": "assistant", "content": intro})
-            await message.channel.send(intro)
-        else:
-            await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
-        return
-
-    if session['last_chatter_message']:
-        response_time = now - session['last_chatter_message']
-        session['response_times'].append(response_time)
-    session['last_chatter_message'] = now
-
-    session['phase_exchanges'] += 1
-
-    # Signaux de passage de phase uniquement pour phases 3, 4, 5
-    if session['phase'] == 2 and session['phase_exchanges'] >= 15 and 3 not in session['phase_warnings_sent']:
-        session['phase_warnings_sent'].append(3)
-        session['phase'] = 3
-        session['phase_exchanges'] = 0
-        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → PRE-SEXUALISATION**")
-
-    elif session['phase'] == 3 and session['phase_exchanges'] >= 7 and 4 not in session['phase_warnings_sent']:
-        session['phase_warnings_sent'].append(4)
-        session['phase'] = 4
-        session['phase_exchanges'] = 0
-        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → SEXUALISATION**")
-
-    elif session['phase'] == 4 and session['phase_exchanges'] >= 10 and 5 not in session['phase_warnings_sent']:
-        session['phase_warnings_sent'].append(5)
-        session['phase'] = 5
-        session['phase_exchanges'] = 0
-        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → FIDELISATION**")
-
-    if len(session['messages']) >= 70:
-        await message.channel.send("--- TEST TERMINE --- Limite atteinte, le rapport arrive.")
-
-    session['messages'].append({
-        "role": "user",
-        "content": message.content
-    })
-
-    response = anthropic_client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        system=SYSTEM_PROMPT,
-        messages=session['messages']
-    )
-
-    reply = response.content[0].text
-    session['messages'].append({
-        "role": "assistant",
-        "content": reply
-    })
-
-    await message.channel.send(reply)
-
-client.run(os.environ.get("DISCORD_TOKEN"))
+            save_sessions(sessions)
+            await message.channel.sen
