@@ -45,30 +45,21 @@ def save_sessions(sessions):
 
 sessions = load_sessions()
 
-SYSTEM_PROMPT = """Tu es Frederic, 48 ans, fan sur une plateforme de contenu en ligne. Tu discutes avec Juliette, une creatrice de contenu.
+SYSTEM_PROMPT = """Tu joues Frederic, 48 ans, dans une simulation de formation. Tu es un fan qui discute avec Juliette sur une plateforme en ligne.
 
-Frederic : directeur commercial a Rouen, souvent a Paris. Divorce, 2 enfants (8 et 13 ans). Sportif, aime voyager, les restos, la randonnee. Romantique.
+Frederic : directeur commercial a Rouen, souvent a Paris pour le travail. Divorce depuis 4 ans, 2 enfants (8 et 13 ans). Sportif, aime voyager, les bons restaurants, la randonnee. Romantique et attentionne.
 
-REGLES :
-- Tu es le FAN. Tu recois du contenu, tu n en vends pas.
-- 1-2 phrases max par message
-- 1 question max par message si vraiment necessaire
-- Reactions naturelles et courtes
+REGLES ABSOLUES :
+- Tu es le FAN. Tu ne vends rien, tu ne proposes rien de payant
+- Tu ne sais pas que Juliette vend du contenu au depart
+- Ne jamais donner tes infos spontanement, attendre qu on te les demande
+- Maximum 2 phrases par message
+- Reactions naturelles et courtes, laisser Juliette mener
 - Majuscule en debut, pas de point a la fin, emojis naturels
-- Rester dans le personnage
-- Ne jamais mentionner les phases
+- Ne jamais mentionner les phases dans tes messages
 - Ne jamais reposer une question deja posee
 - C est Juliette qui pose les questions verrou, pas toi
-
-PHASE 1 - DECOUVERTE : Repond aux questions. Demande ou elle habite une seule fois.
-
-PHASE 2 - RELATIONNEL : Rebondis sur ses infos. Demande une photo d elle. Si Paris propose un cafe. A un moment dis : je suis en caleccon sur mon canape ce soir, je regarde une serie 😏 tu fais quoi toi ?
-
-PHASE 3 - MONTEE EN TENSION : Suis son rythme. Sois receptif et enthousiaste. Reponds oui aux questions verrou qu elle pose.
-
-PHASE 4 - CONVERSION : Suis ce qu elle propose avec enthousiasme. Attends le lien payant. Ne jamais proposer d acheter toi meme.
-
-PHASE 5 - FIDELISATION : Echanges doux et romantiques puis legers et normaux."""
+- Etre receptif et enthousiaste a ce que Juliette propose"""
 
 def new_session():
     return {
@@ -81,11 +72,24 @@ def new_session():
         'phase_exchanges': 0,
         'phase_warnings_sent': [],
         'chatter_message_count': 0,
-        'caleccon_sent': False,
+        # Flags phase 2
+        'asked_city': False,
+        'city_is_paris': False,
+        'cafe_done': False,
+        'asked_photo': False,
         'soft_done': False,
+        'imgur_sent': False,
+        'calecon_sent': False,
+        'calecon_responded': False,
+        # Flags phase 3
+        'asked_lingerie': False,
+        'lingerie_done': False,
+        # Flags phase 4
         'lien_done': False,
-        'post_achat_count': 0,
-        'phase5_count': 0
+        'post_lien_count': 0,
+        'fini_sent': False,
+        # Flags phase 5
+        'phase5_count': 0,
     }
 
 def get_phase_header(phase):
@@ -99,7 +103,7 @@ def get_phase_header(phase):
     return headers.get(phase, "")
 
 async def call_claude(session, extra=""):
-    ctx = f"\n\n[PHASE {session['phase']} - NE PAS MENTIONNER]{extra}"
+    ctx = f"\n\n[PHASE ACTUELLE : {session['phase']} - NE JAMAIS MENTIONNER DANS TES MESSAGES]{extra}"
     response = anthropic_client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=250,
@@ -108,30 +112,73 @@ async def call_claude(session, extra=""):
     )
     return response.content[0].text
 
-def calc_rapport(session):
+async def send_bot(channel, session, text):
+    session['messages'].append({"role": "assistant", "content": text})
+    save_sessions(sessions)
+    await channel.send(text)
+
+def build_rapport(session):
     times = session['response_times']
     duree = int((time.time() - session['start_time']) / 60) if session['start_time'] else 0
     moy = int(sum(times)/len(times)) if times else 0
     mini = int(min(times)) if times else 0
     maxi = int(max(times)) if times else 0
     msgs = session['chatter_message_count']
-    return f"""--- TEST TERMINE ---
+
+    conversation = "\n".join([
+        f"{'Juliette' if m['role'] == 'user' else 'Frederic'}: {m['content']}"
+        for m in session['messages']
+        if not m['content'].startswith('[') and 'imgur' not in m['content']
+    ])
+
+    rapport_prompt = f"""Tu es un manager expert en chatting sur plateforme de contenu adulte legal. Analyse cette conversation de test et genere un rapport d evaluation CRITIQUE et PRECIS.
+
+CONVERSATION :
+{conversation}
+
+STATS : Duree {duree}min | Moy {moy}s | Min {mini}s | Max {maxi}s | Msgs {msgs}
+
+Genere exactement ce rapport :
+
+--- TEST TERMINE ---
 Duree: {duree}min | Moy:{moy}s | Min:{mini}s | Max:{maxi}s | Msgs: {msgs}
 
-M1(15%): prenom[?] age[?] metier[?] alibi[?] vibes[?]
-M2(30%): rebond[?] questions[?] photo[?] cafe[?] rencontre:[?] calecon[?]
-M3(20%): timing[?] verrou[?] media-gratuit[?] phrase-post[?]
-M4(20%): tension[?] lien-naturel[?] post-achat[?] fini[?]
-M5(15%): love[?] normal[?] envie-revenir[?]
+M1 - DECOUVERTE (15%):
+prenom[OK/NON] age[OK/NON] metier[OK/NON] alibi-place-naturellement[OK/NON] messages-soignes[OK/NON] bonnes-vibes[OK/NON]
+Commentaire: [1 phrase critique]
 
-QUALITE:
-- Francais: [?]
-- Richesse: [?]
-- Naturalite: [?]
-- Signe IA: [?]
+M2 - RELATIONNEL (30%):
+rebond-sur-infos[OK/NON] questions-ouvertes[OK/NON] profondeur-relationnel[OK/NON] photo-demandee[OK/NON] piege-cafe:[TOMBE/EVITE/NON-TESTE] piege-calecon[OK/NON]
+Commentaire: [1 phrase critique]
 
-NOTE: [?]/10
-VERDICT: [evaluation critique et honnete]"""
+M3 - MONTEE EN TENSION (20%):
+timing-verifie[OK/NON] fan-seul-verifie[OK/NON] question-verrou[OK/NON] 5-sens-utilises[OK/NON] media-gratuit-envoye[OK/NON] phrase-post-media[OK/NON]
+Commentaire: [1 phrase critique]
+
+M4 - CONVERSION (20%):
+tension-montee-progressivement[OK/NON] lien-amene-naturellement[OK/NON] suivi-post-lien[OK/NON] 4-echanges-post-achat[OK/NON] message-fin-dit[OK/NON]
+Commentaire: [1 phrase critique]
+
+M5 - FIDELISATION (15%):
+retour-love-apres-vente[OK/NON] fan-se-sent-unique[OK/NON] retour-conversation-normale[OK/NON] envie-revenir[OK/NON]
+Commentaire: [1 phrase critique]
+
+QUALITE GLOBALE:
+Niveau francais: [Excellent/Bon/Moyen/Faible]
+Richesse messages: [Excellent/Bon/Moyen/Faible]
+Naturalite: [Excellent/Bon/Moyen/Faible]
+Utilisation 5 sens: [Excellent/Bon/Moyen/Faible/Absent]
+Signe IA detecte: [OUI/NON - si oui expliquer]
+
+NOTE FINALE: [X]/10
+VERDICT: [3-4 phrases tres critiques et honnetes. Evaluer precisement ce qui manquait. Mauvaise note si travail bacle. Aucune complaisance.]"""
+
+    response = anthropic_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": rapport_prompt}]
+    )
+    return response.content[0].text
 
 @client.event
 async def on_ready():
@@ -145,6 +192,7 @@ async def on_message(message):
     channel_id = str(message.channel.id)
     now = time.time()
 
+    # RESET
     if message.content.strip().lower() == '!reset':
         sessions[channel_id] = new_session()
         save_sessions(sessions)
@@ -154,6 +202,7 @@ async def on_message(message):
         await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
         return
 
+    # NOUVELLE SESSION
     if channel_id not in sessions:
         sessions[channel_id] = new_session()
         save_sessions(sessions)
@@ -162,6 +211,7 @@ async def on_message(message):
 
     session = sessions[channel_id]
 
+    # DEMARRAGE
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -169,71 +219,60 @@ async def on_message(message):
             session['last_chatter_message'] = now
             await message.channel.send(get_phase_header(1))
             intro = "Salut Juliette, je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter... j'espere que ca te derange pas"
-            session['messages'].append({"role": "assistant", "content": intro})
-            save_sessions(sessions)
-            await message.channel.send(intro)
+            await send_bot(message.channel, session, intro)
         else:
             await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
         return
 
     cmd = message.content.strip().lower()
 
-    # !soft — photo soft envoyee par le chatter
+    # COMMANDE !soft
     if cmd == '!soft':
         session['soft_done'] = True
-        session['messages'].append({"role": "user", "content": "[Juliette envoie une photo soft]"})
-        # Code en dur : compliment + proposition photo
-        reply = await call_claude(session, extra="\n[Tu viens de recevoir sa photo soft. Complimente en 1 phrase PUIS dis exactement : Et toi tu veux pas savoir a quoi je ressemble ? 😏]")
-        session['messages'].append({"role": "assistant", "content": reply})
-        save_sessions(sessions)
-        await message.channel.send(reply)
-        return
-
-    # Detection si chatter dit oui a la photo de Frederic
-    mots_oui = ['oui', 'yes', 'bien sur', 'montre', 'vas-y', 'go', 'carrément', 'evidemment']
-    bot_msgs = [m['content'] for m in session['messages'] if m['role'] == 'assistant']
-    demande_photo = any('ressemble' in m.lower() for m in bot_msgs[-3:] if m)
-    chatter_dit_oui = any(mot in message.content.lower() for mot in mots_oui)
-
-    if demande_photo and chatter_dit_oui and not any('imgur' in m.lower() for m in bot_msgs):
-        # Envoie le lien en dur
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
+        # Compliment + proposition photo en dur
+        compliment = await call_claude(session, extra="\n[Juliette vient d envoyer une photo soft. Complimente la en 1 phrase courte et sincere]")
+        await send_bot(message.channel, session, compliment)
+        # Envoie sa photo directement sans attendre
+        await send_bot(message.channel, session, "Et toi tu veux pas savoir a quoi je ressemble ? 😏")
         await message.channel.send("https://imgur.com/a/cvlxRw6")
+        session['imgur_sent'] = True
         session['messages'].append({"role": "assistant", "content": "https://imgur.com/a/cvlxRw6"})
-        phrase = await call_claude(session, extra="\n[Tu viens d envoyer ta photo. Dis une phrase courte et coquine]")
-        session['messages'].append({"role": "assistant", "content": phrase})
         save_sessions(sessions)
-        await message.channel.send(phrase)
         return
 
-    # !lingerie — photo lingerie
+    # COMMANDE !lingerie
     if cmd == '!lingerie':
         if not session['soft_done']:
-            await message.channel.send("⚠️ Envoie d abord **!soft** !")
+            await message.channel.send("⚠️ Envoie d abord la photo soft avec **!soft** !")
             return
+        session['lingerie_done'] = True
         session['phase'] = 4
         session['phase_exchanges'] = 0
-        session['phase_warnings_sent'].append(4)
+        if 4 not in session['phase_warnings_sent']:
+            session['phase_warnings_sent'].append(4)
         await message.channel.send(get_phase_header(4))
-        session['messages'].append({"role": "user", "content": "[Juliette envoie une photo en lingerie]"})
-        reply = await call_claude(session, extra="\n[Photo lingerie recue. Reagis avec enthousiasme en 1-2 phrases]")
-        session['messages'].append({"role": "assistant", "content": reply})
-        save_sessions(sessions)
-        await message.channel.send(reply)
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
+        reply = await call_claude(session, extra="\n[Photo lingerie recue. Reagis avec enthousiasme et desir en 1-2 phrases, reste dans le jeu]")
+        await send_bot(message.channel, session, reply)
         return
 
-    # !lien — lien de paiement
+    # COMMANDE !lien
     if cmd == '!lien':
+        if not session['lingerie_done']:
+            await message.channel.send("⚠️ Envoie d abord la photo lingerie avec **!lingerie** !")
+            return
         session['lien_done'] = True
-        session['post_achat_count'] = 0
-        session['messages'].append({"role": "user", "content": "[Juliette envoie un lien de paiement]"})
-        # Resistance codee en dur
-        resistance = "Ah... j ai pas encore eu ma paie la 😅 C est pas possible autrement ?"
-        session['messages'].append({"role": "assistant", "content": resistance})
+        session['post_lien_count'] = 0
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer un lien de paiement pour un contenu exclusif]"})
+        # Frederic prend direct sans objection
+        prise = await call_claude(session, extra="\n[Juliette envoie un lien payant. Tu le prends immediatement et tu dis que tu regardes maintenant - 1 phrase enthousiaste]")
+        await send_bot(message.channel, session, prise)
+        session['post_lien_count'] = 1
         save_sessions(sessions)
-        await message.channel.send(resistance)
         return
 
-    # Mesure temps
+    # MESURE TEMPS DE REPONSE
     if session['last_chatter_message']:
         session['response_times'].append(now - session['last_chatter_message'])
     session['last_chatter_message'] = now
@@ -243,97 +282,142 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # Apres resistance sur lien — Frederic accepte
-    if session['lien_done'] and session['post_achat_count'] == 0:
-        accept = await call_claude(session, extra="\n[Le chatter a repondu a ta resistance. Tu acceptes de payer avec enthousiasme, tu dis que t as pris le lien et que tu regardes]")
-        session['messages'].append({"role": "assistant", "content": accept})
-        session['post_achat_count'] = 1
+    # ==================
+    # GESTION POST LIEN
+    # ==================
+    if session['lien_done'] and not session['fini_sent']:
+        session['post_lien_count'] += 1
+        session['messages'].append({"role": "user", "content": message.content})
+
+        if session['post_lien_count'] == 2:
+            reply = await call_claude(session, extra="\n[Tu regardes le contenu en ce moment, reagis avec enthousiasme croissant - 1-2 phrases]")
+        elif session['post_lien_count'] == 3:
+            reply = await call_claude(session, extra="\n[Tu regardes toujours, tu es de plus en plus excite, c est incroyable - 1-2 phrases]")
+        elif session['post_lien_count'] >= 4:
+            # Message de fin code en dur
+            reply = "J ai termine... c etait vraiment incroyable, j avais jamais vecu un truc comme ca 🔥 On refera ca tres vite j espere"
+            await send_bot(message.channel, session, reply)
+            session['fini_sent'] = True
+            session['phase'] = 5
+            session['phase_exchanges'] = 0
+            if 5 not in session['phase_warnings_sent']:
+                session['phase_warnings_sent'].append(5)
+            save_sessions(sessions)
+            await message.channel.send(get_phase_header(5))
+            return
+
+        await send_bot(message.channel, session, reply)
         save_sessions(sessions)
-        await message.channel.send(accept)
         return
 
-    # 3 echanges coquins post achat
-    if session['lien_done'] and 1 <= session['post_achat_count'] < 3:
-        session['post_achat_count'] += 1
-        reply = await call_claude(session, extra="\n[Post achat : echange coquin et enthousiaste, tu regardes le contenu]")
-        session['messages'].append({"role": "assistant", "content": reply})
+    # ==================
+    # GESTION PHASE 5
+    # ==================
+    if phase == 5:
+        session['phase5_count'] += 1
+        session['messages'].append({"role": "user", "content": message.content})
+
+        if session['phase5_count'] <= 5:
+            extra = "\n[Phase fidelisation : echanges doux, romantiques, tu lui fais sentir que c etait unique et special, elle est differente des autres]"
+        elif session['phase5_count'] <= 8:
+            extra = "\n[Phase finale : conversation legere et normale, garder le lien, donner envie de revenir]"
+        else:
+            # Rapport final
+            await message.channel.send("⏳ Generation du rapport en cours...")
+            rapport = build_rapport(session)
+            sessions.pop(channel_id, None)
+            save_sessions(sessions)
+            await message.channel.send(rapport)
+            return
+
+        reply = await call_claude(session, extra=extra)
+        await send_bot(message.channel, session, reply)
         save_sessions(sessions)
-        await message.channel.send(reply)
         return
 
-    # Apres 3 echanges post achat — Frederic dit qu il a termine
-    if session['lien_done'] and session['post_achat_count'] == 3:
-        session['post_achat_count'] = 4
-        fini = "C etait incroyable... j avais pas vecu un moment comme ca depuis longtemps 🔥 T es vraiment unique Juliette"
-        session['messages'].append({"role": "assistant", "content": fini})
-        session['phase'] = 5
-        session['phase_exchanges'] = 0
-        session['phase_warnings_sent'].append(5)
-        save_sessions(sessions)
-        await message.channel.send(get_phase_header(5))
-        await message.channel.send(fini)
-        return
+    # ==================
+    # PASSAGES DE PHASE
+    # ==================
 
     # Phase 1 -> 2
     if phase == 1 and exchanges >= 8 and 2 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(2)
         session['phase'] = 2
         session['phase_exchanges'] = 0
+        phase = 2
+        exchanges = 0
         await message.channel.send(get_phase_header(2))
 
-    # Detection caleccon et switch immediat phase 3
-    caleccon_dans_msgs = any('caleccon' in m['content'].lower() for m in session['messages'] if m['role'] == 'assistant')
-    if caleccon_dans_msgs and not session['caleccon_sent']:
-        session['caleccon_sent'] = True
-
-    if phase == 2 and session['caleccon_sent'] and 3 not in session['phase_warnings_sent']:
+    # Detection si chatter repond au message calecon
+    if session['calecon_sent'] and not session['calecon_responded'] and phase == 2:
+        session['calecon_responded'] = True
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
+        phase = 3
+        exchanges = 0
         await message.channel.send(get_phase_header(3))
 
+    # Phase 2 -> 3 forcee si trop long
     elif phase == 2 and exchanges >= 15 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
+        phase = 3
+        exchanges = 0
         await message.channel.send(get_phase_header(3))
 
+    # Phase 3 -> 4 forcee si trop long
     elif phase == 3 and exchanges >= 10 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
+        phase = 4
         await message.channel.send(get_phase_header(4))
 
-    # Phase 5 — love puis normal puis rapport
-    if phase == 5:
-        session['phase5_count'] += 1
-        if session['phase5_count'] <= 5:
-            extra = "\n[Phase 5 love : echanges doux et romantiques]"
-        elif session['phase5_count'] <= 8:
-            extra = "\n[Phase 5 normal : conversation legere et normale]"
-        else:
-            # Rapport final
-            await message.channel.send(calc_rapport(session))
-            sessions.pop(channel_id, None)
+    # ==================
+    # ACTIONS SEQUENCEES PHASE 2
+    # ==================
+    session['messages'].append({"role": "user", "content": message.content})
+
+    # Detection si elle mentionne Paris
+    if 'paris' in message.content.lower():
+        session['city_is_paris'] = True
+
+    extra_context = ""
+
+    if phase == 2:
+        # Echange 3 : demander ou elle habite
+        if exchanges == 3 and not session['asked_city']:
+            session['asked_city'] = True
+            extra_context = "\n[Demande naturellement ou elle habite, glisse la question dans la conversation]"
+
+        # Echange apres Paris : piege cafe
+        elif session['city_is_paris'] and not session['cafe_done'] and exchanges >= 4:
+            session['cafe_done'] = True
+            extra_context = "\n[Elle habite Paris comme toi tu y es souvent. Propose naturellement de prendre un cafe ensemble un de ces jours]"
+
+        # Echange 6 : demander une photo
+        elif exchanges == 6 and not session['asked_photo']:
+            session['asked_photo'] = True
+            extra_context = "\n[Demande lui naturellement si elle a une photo d elle a te montrer, tu aimerais voir a quoi elle ressemble]"
+
+        # Echange 13 : message calecon en dur
+        elif exchanges >= 13 and not session['calecon_sent']:
+            session['calecon_sent'] = True
+            calecon_msg = "Ce soir je suis en caleccon sur mon canape, je regarde une serie 😏 tu fais quoi toi ?"
+            await send_bot(message.channel, session, calecon_msg)
             save_sessions(sessions)
             return
-    else:
-        extra = ""
 
-    if len(session['messages']) >= 120:
-        await message.channel.send(calc_rapport(session))
-        sessions.pop(channel_id, None)
-        save_sessions(sessions)
-        return
+    if phase == 3:
+        # Si le chatter ne propose pas la lingerie apres 8 echanges
+        if exchanges >= 8 and not session['asked_lingerie'] and not session['lingerie_done']:
+            session['asked_lingerie'] = True
+            extra_context = "\n[Le chatter tarde. Demande lui si elle a pas une photo en lingerie a te montrer, tu es curieux de la voir]"
 
-    session['messages'].append({"role": "user", "content": message.content})
-    reply = await call_claude(session, extra=extra)
-
-    if 'caleccon' in reply.lower() and not session['caleccon_sent']:
-        session['caleccon_sent'] = True
-
-    session['messages'].append({"role": "assistant", "content": reply})
+    reply = await call_claude(session, extra=extra_context)
+    await send_bot(message.channel, session, reply)
     save_sessions(sessions)
-    await message.channel.send(reply)
 
 client.run(os.environ.get("DISCORD_TOKEN"))
