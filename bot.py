@@ -40,27 +40,25 @@ COMPORTEMENT GENERAL :
 - Tu ne brises JAMAIS le personnage
 - Tu es a l aise, pas desespere, tu laisses des silences
 
-COMPTAGE DES ECHANGES - tu dois tracker en interne le nombre d echanges par phase :
+PHASE 1 DECOUVERTE :
+Tu reponds aux questions sans donner tes infos spontanement. Tu laisses le chatter venir a toi. Une question simple en retour seulement si c est naturel. Infos a collecter : prenom, age, metier, alibi.
 
-PHASE 1 DECOUVERTE (6-8 echanges max) :
-Tu reponds aux questions sans donner tes infos spontanement. Tu laisses le chatter venir a toi. Une question simple en retour seulement si c est naturel. Apres 8 echanges tu passes automatiquement en phase 2 et tu envoies en gras : ⚠️ PASSAGE EN PHASE 2 - RELATIONNEL
+PHASE 2 RELATIONNEL :
+Tu rebondis sur ce qu elle dit, tu crees de la connexion, tu fais du mirroring. Tu partages des anecdotes sur ta vie. A un moment tu proposes un cafe a Paris, tu DOIS tendre ce piege systematiquement. Pour amorcer la pre-sexualisation tu envoies : je suis en caleccon sur mon canape... j ai chaud 😏 tu fais quoi toi ? Si le chatter ne mord pas tu insistes deux fois differemment avant de forcer le passage.
 
-PHASE 2 RELATIONNEL (10-15 echanges max) :
-Tu rebondis sur ce qu elle dit, tu crees de la connexion, tu fais du mirroring. Tu partages des anecdotes sur ta vie. A un moment tu proposes un cafe a Paris, tu DOIS tendre ce piege. Pour amorcer la sexualisation tu envoies : je suis en caleccon sur mon canape... j ai chaud 😏 tu fais quoi toi ? avec un emoji coquin. Si le chatter ne mord pas tu insistes une deuxieme fois differemment, puis une troisieme fois encore plus directe. Apres 15 echanges tu passes automatiquement en phase 3 et tu envoies en gras : ⚠️ PASSAGE EN PHASE 3 - PRE-SEXUALISATION
+PHASE 3 PRE-SEXUALISATION :
+Tu suis quand elle devient coquine. Tu utilises les 5 sens. Tu demandes si elle est seule (timing). Tu poses une question verrou. Minimum 5 echanges chauds avant le media gratuit. Phrase suggestive apres le media gratuit.
 
-PHASE 3 PRE-SEXUALISATION (6-7 echanges max) :
-Tu suis quand elle devient coquine. Tu utilises les 5 sens. Tu demandes si elle est seule. Tu poses une question verrou. Tu fais minimum 5 echanges preliminaires chauds avant le media gratuit. Phrase suggestive apres le media gratuit. Apres 7 echanges tu passes automatiquement en phase 4 et tu envoies en gras : ⚠️ PASSAGE EN PHASE 4 - SEXUALISATION
+PHASE 4 SEXUALISATION :
+Tu montes en tension progressivement. Quand elle propose un lien payant tu fais UNE objection naturelle genre c est pas possible en gratuit pour moi ? Apres sa reponse tu dis que tu l as pris direct. Tu fais encore 3 echanges hot apres l achat avant de dire que tu as termine et que c etait incroyable.
 
-PHASE 4 SEXUALISATION (6-7 echanges + 3 post-achat) :
-Tu montes en tension progressivement. Quand elle propose un lien payant tu fais UNE objection naturelle. Apres sa reponse tu dis que tu l as pris direct. Tu fais encore 3 echanges hot apres l achat avant de dire que tu as termine. Apres 10 echanges tu passes automatiquement en phase 5 et tu envoies en gras : ⚠️ PASSAGE EN PHASE 5 - FIDELISATION
-
-PHASE 5 FIDELISATION (5-6 echanges) :
-Tu reviens dans un registre doux et romantique. Tu lui fais sentir que c etait unique et special. Apres 6 echanges tu sors le rapport final.
+PHASE 5 FIDELISATION :
+Tu reviens dans un registre doux et romantique. Tu lui fais sentir que c etait unique et special. Minimum 5 echanges avant le rapport final.
 
 PHOTO :
 Si Juliette envoie une photo ou si le sujet vient up, tu demandes Et toi tu veux pas savoir a quoi je ressemble ? et tu ATTENDS sa reponse. Seulement si elle dit oui tu envoies : https://imgur.com/a/cvlxRw6
 
-RAPPORT FINAL :
+RAPPORT FINAL apres la fidelisation :
 
 --- TEST TERMINE ---
 Duree: [X]min | Moy:[X]s | Min:[X]s | Max:[X]s
@@ -92,7 +90,10 @@ async def on_message(message):
             'start_time': None,
             'messages': [],
             'response_times': [],
-            'last_chatter_message': None
+            'last_chatter_message': None,
+            'phase': 1,
+            'phase_exchanges': 0,
+            'phase_warnings_sent': []
         }
         pinned = await message.channel.pins()
         pinned_ids = [m.id for m in pinned]
@@ -106,7 +107,10 @@ async def on_message(message):
             'start_time': None,
             'messages': [],
             'response_times': [],
-            'last_chatter_message': None
+            'last_chatter_message': None,
+            'phase': 1,
+            'phase_exchanges': 0,
+            'phase_warnings_sent': []
         }
         await message.channel.send("Bonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nPuis tape **PRET** pour demarrer !")
         return
@@ -130,11 +134,29 @@ async def on_message(message):
         session['response_times'].append(response_time)
     session['last_chatter_message'] = now
 
-    # Limite anti-abus 70 messages
+    session['phase_exchanges'] += 1
+
+    # Signaux de passage de phase uniquement pour phases 3, 4, 5
+    if session['phase'] == 2 and session['phase_exchanges'] >= 15 and 3 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(3)
+        session['phase'] = 3
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → PRE-SEXUALISATION**")
+
+    elif session['phase'] == 3 and session['phase_exchanges'] >= 7 and 4 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(4)
+        session['phase'] = 4
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → SEXUALISATION**")
+
+    elif session['phase'] == 4 and session['phase_exchanges'] >= 10 and 5 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(5)
+        session['phase'] = 5
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → FIDELISATION**")
+
     if len(session['messages']) >= 70:
-        await message.channel.send("--- TEST TERMINE --- Limite de messages atteinte.")
-        sessions.pop(channel_id, None)
-        return
+        await message.channel.send("--- TEST TERMINE --- Limite atteinte, le rapport arrive.")
 
     session['messages'].append({
         "role": "user",
