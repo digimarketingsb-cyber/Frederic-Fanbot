@@ -138,4 +138,60 @@ async def on_message(message):
             intro = "Salut Juliette, je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter... j'espere que ca te derange pas"
             session['messages'].append({"role": "assistant", "content": intro})
             save_sessions(sessions)
-            await message.channel.sen
+            await message.channel.send(intro)
+        else:
+            await message.channel.send("⬆️ Lis les consignes epinglees puis tape **PRET** pour demarrer !")
+        return
+
+    if session['last_chatter_message']:
+        response_time = now - session['last_chatter_message']
+        session['response_times'].append(response_time)
+    session['last_chatter_message'] = now
+    session['phase_exchanges'] += 1
+
+    if session['phase'] == 2 and session['phase_exchanges'] >= 15 and 3 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(3)
+        session['phase'] = 3
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → PRE-SEXUALISATION**")
+
+    elif session['phase'] == 3 and session['phase_exchanges'] >= 7 and 4 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(4)
+        session['phase'] = 4
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → SEXUALISATION**")
+
+    elif session['phase'] == 4 and session['phase_exchanges'] >= 10 and 5 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(5)
+        session['phase'] = 5
+        session['phase_exchanges'] = 0
+        await message.channel.send("**⚠️ ON PASSE A LA PHASE SUIVANTE → FIDELISATION**")
+
+    if len(session['messages']) >= 70:
+        await message.channel.send("--- TEST TERMINE --- Limite atteinte.")
+        sessions.pop(channel_id, None)
+        save_sessions(sessions)
+        return
+
+    session['messages'].append({
+        "role": "user",
+        "content": message.content
+    })
+
+    response = anthropic_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
+        system=SYSTEM_PROMPT,
+        messages=session['messages']
+    )
+
+    reply = response.content[0].text
+    session['messages'].append({
+        "role": "assistant",
+        "content": reply
+    })
+
+    save_sessions(sessions)
+    await message.channel.send(reply)
+
+client.run(os.environ.get("DISCORD_TOKEN"))
