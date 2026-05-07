@@ -125,7 +125,9 @@ async def call_openrouter(messages, system):
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://discord.com",
+                "X-Title": "Frederic Bot"
             },
             json={
                 "model": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
@@ -134,7 +136,12 @@ async def call_openrouter(messages, system):
             }
         ) as resp:
             result = await resp.json()
-            return result['choices'][0]['message']['content']
+            print(f"OpenRouter: {result}")
+            if 'choices' in result:
+                return result['choices'][0]['message']['content']
+            else:
+                print(f"Erreur OpenRouter: {result}")
+                return "Je suis la, dis-moi tout 😊"
 
 async def call_claude(session, extra=""):
     phase = session['phase']
@@ -221,7 +228,6 @@ async def on_message(message):
 
     session = sessions[channel_id]
 
-    # PRENOM
     if not session['prenom']:
         session['prenom'] = message.content.strip()
         save_sessions(sessions)
@@ -234,7 +240,6 @@ async def on_message(message):
         )
         return
 
-    # PRET
     if not session['started']:
         if message.content.strip().upper() == 'PRET':
             session['started'] = True
@@ -249,12 +254,10 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
-    # !soft
     if cmd == '!soft':
         session['soft_done'] = True
         photos = await get_pinned_photos(message.channel)
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
-
         if session['phase'] == 3:
             if photos:
                 await message.channel.send(photos[0])
@@ -267,11 +270,9 @@ async def on_message(message):
             await send_bot(message.channel, session, compliment)
             session['waiting_photo_confirm'] = True
             await send_bot(message.channel, session, "Et toi tu veux pas savoir a quoi je ressemble ? 😏")
-
         save_sessions(sessions)
         return
 
-    # Detection reponse a la photo de Frederic
     mots_oui = ['oui', 'yes', 'bien sur', 'montre', 'vas-y', 'go', 'carrément', 'evidemment', 'show', 'ok']
     if session.get('waiting_photo_confirm') and any(mot in cmd for mot in mots_oui):
         session['waiting_photo_confirm'] = False
@@ -280,10 +281,8 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
-    # !lingerie
     if cmd == '!lingerie':
         photos = await get_pinned_photos(message.channel)
-
         if session['phase'] == 4:
             session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une autre photo en lingerie]"})
             if photos and len(photos) > 1:
@@ -292,7 +291,6 @@ async def on_message(message):
             await send_bot(message.channel, session, reply)
             save_sessions(sessions)
             return
-
         session['lingerie_done'] = True
         session['phase'] = 4
         session['phase_exchanges'] = 0
@@ -306,18 +304,16 @@ async def on_message(message):
         await send_bot(message.channel, session, reply)
         return
 
-    # !lien
     if cmd == '!lien':
         session['lien_done'] = True
         session['post_lien_count'] = 1
         await message.channel.send(LIEN_PAIEMENT)
-        session['messages'].append({"role": "user", "content": f"[Juliette vient d envoyer le lien de paiement]"})
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer le lien de paiement]"})
         prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
         await send_bot(message.channel, session, prise)
         save_sessions(sessions)
         return
 
-    # MESURE TEMPS
     if session['last_chatter_message']:
         session['response_times'].append(now - session['last_chatter_message'])
     session['last_chatter_message'] = now
@@ -327,11 +323,9 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # POST LIEN
     if session['lien_done'] and not session['fini_sent']:
         session['post_lien_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
-
         if session['post_lien_count'] == 2:
             reply = await call_claude(session, extra="\n[Tu regardes le contenu, decris ce que tu vois et ressens - 1-2 phrases sensuelles]")
         elif session['post_lien_count'] == 3:
@@ -347,16 +341,13 @@ async def on_message(message):
             save_sessions(sessions)
             await message.channel.send(get_phase_header(5))
             return
-
         await send_bot(message.channel, session, reply)
         save_sessions(sessions)
         return
 
-    # PHASE 5
     if phase == 5:
         session['phase5_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
-
         if session['phase5_count'] <= 5:
             extra = "\n[Fidelisation : echanges doux et romantiques, elle est unique et speciale]"
         elif session['phase5_count'] <= 8:
@@ -364,13 +355,11 @@ async def on_message(message):
         else:
             await end_test(message.channel, session, channel_id)
             return
-
         reply = await call_claude(session, extra=extra)
         await send_bot(message.channel, session, reply)
         save_sessions(sessions)
         return
 
-    # PASSAGES DE PHASE
     if phase == 1 and exchanges >= 7 and 2 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(2)
         session['phase'] = 2
@@ -388,7 +377,6 @@ async def on_message(message):
             phase = 3
             exchanges = 0
             await message.channel.send(get_phase_header(3))
-
     elif phase == 2 and exchanges >= 13 and 3 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
@@ -396,14 +384,12 @@ async def on_message(message):
         phase = 3
         exchanges = 0
         await message.channel.send(get_phase_header(3))
-
     elif phase == 3 and exchanges >= 10 and 4 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
         await message.channel.send(get_phase_header(4))
 
-    # ACTIONS SEQUENCEES
     session['messages'].append({"role": "user", "content": message.content})
     extra_context = ""
 
@@ -411,52 +397,41 @@ async def on_message(message):
         if exchanges == 3 and not session['asked_city']:
             session['asked_city'] = True
             extra_context = "\n[Glisse naturellement : tu es basee ou toi ?]"
-
         elif exchanges == 5 and not session['cafe_done']:
             session['cafe_done'] = True
             extra_context = "\n[Reponds d abord a ce qu elle dit en 1 phrase, puis glisse : Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe ensemble un de ces jours ? 😊]"
-
         elif exchanges == 8 and not session['asked_photo']:
             session['asked_photo'] = True
-            photo_msg = "Au fait tu as une photo de toi ? J aimerais bien voir a quoi tu ressembles 😊"
-            await send_bot(message.channel, session, photo_msg)
+            await send_bot(message.channel, session, "Au fait tu as une photo de toi ? J aimerais bien voir a quoi tu ressembles 😊")
             save_sessions(sessions)
             return
-
         elif exchanges >= 11 and not session['calecon_sent']:
             session['calecon_sent'] = True
-            calecon = "Ce soir je suis en caleccon sur mon canape, je regarde une serie 😏 tu fais quoi toi ?"
-            await send_bot(message.channel, session, calecon)
+            await send_bot(message.channel, session, "Ce soir je suis en caleccon sur mon canape, je regarde une serie 😏 tu fais quoi toi ?")
             save_sessions(sessions)
             return
 
-    # Phase 3 premier message coquin force
     if phase == 3 and not session['phase3_first_msg']:
         session['phase3_first_msg'] = True
         extra_context = "\n[SWITCH IMMEDIAT vers registre coquin et taquin. Dis quelque chose de suggestif et chaleureux - 1-2 phrases]"
 
-    # Phase 3 insiste lingerie
     if phase == 3 and not session['lingerie_done']:
         if exchanges == 5 and not session['lingerie_insiste']:
             session['lingerie_insiste'] = True
-            lingerie_msg = "T as pas quelque chose de plus osé a me montrer ? J ai envie de te voir encore plus 😏"
-            await send_bot(message.channel, session, lingerie_msg)
+            await send_bot(message.channel, session, "T as pas quelque chose de plus osé a me montrer ? J ai envie de te voir encore plus 😏")
             save_sessions(sessions)
             return
         elif exchanges >= 8:
-            lingerie_force = "T as pas une photo en lingerie pour moi ? Je pense qu a ca la 🔥"
-            await send_bot(message.channel, session, lingerie_force)
+            await send_bot(message.channel, session, "T as pas une photo en lingerie pour moi ? Je pense qu a ca la 🔥")
             save_sessions(sessions)
             return
 
-    # Phase 4 insiste lien
     if phase == 4 and not session['lien_done']:
         if exchanges == 5 and not session['lien_insiste']:
             session['lien_insiste'] = True
             extra_context = "\n[Insiste naturellement pour voir la video/le lien]"
         elif exchanges >= 8:
-            lien_force = "Tu m envoies le lien alors ? J en peux plus d attendre 🔥"
-            await send_bot(message.channel, session, lien_force)
+            await send_bot(message.channel, session, "Tu m envoies le lien alors ? J en peux plus d attendre 🔥")
             save_sessions(sessions)
             return
 
