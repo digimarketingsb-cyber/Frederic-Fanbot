@@ -1,9 +1,9 @@
 import discord
 import os
+import anthropic
 import threading
 import time
 import json
-import aiohttp
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class Handler(BaseHTTPRequestHandler):
@@ -25,8 +25,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
 client = discord.Client(intents=intents)
+anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 LIEN_PAIEMENT = "https://app.dropp.fans/fr/external/share/link/link_10b3p9E8ICCwUufk6Zvs/"
 SESSIONS_FILE = "sessions.json"
 
@@ -119,35 +119,22 @@ def get_phase_header(phase):
     }
     return headers.get(phase, "")
 
-async def call_openrouter(messages, system):
-    async with aiohttp.ClientSession() as http:
-        async with http.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://discord.com",
-                "X-Title": "Frederic Bot"
-            },
-            json={
-                "model": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-                "messages": [{"role": "system", "content": system}] + messages,
-                "max_tokens": 250
-            }
-        ) as resp:
-            result = await resp.json()
-            print(f"OpenRouter: {result}")
-            if 'choices' in result:
-                return result['choices'][0]['message']['content']
-            else:
-                print(f"Erreur OpenRouter: {result}")
-                return "Je suis la, dis-moi tout 😊"
-
 async def call_claude(session, extra=""):
     phase = session['phase']
-    system = SYSTEM_PROMPT_HOT if phase in [3, 4] else SYSTEM_PROMPT_BASE
+    if phase in [3, 4]:
+        system = SYSTEM_PROMPT_HOT
+        model = "claude-opus-4-5"
+    else:
+        system = SYSTEM_PROMPT_BASE
+        model = "claude-haiku-4-5-20251001"
     ctx = f"\n\n[PHASE {phase} - NE JAMAIS MENTIONNER DANS TES MESSAGES]{extra}"
-    return await call_openrouter(session['messages'], system + ctx)
+    response = anthropic_client.messages.create(
+        model=model,
+        max_tokens=250,
+        system=system + ctx,
+        messages=session['messages']
+    )
+    return response.content[0].text
 
 async def send_bot(channel, session, text):
     session['messages'].append({"role": "assistant", "content": text})
