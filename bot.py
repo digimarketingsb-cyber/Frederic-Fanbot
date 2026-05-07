@@ -59,7 +59,8 @@ REGLES ABSOLUES :
 - Majuscule en debut, pas de point a la fin, emojis naturels
 - Ne jamais mentionner les phases dans tes messages
 - Ne jamais reposer une question deja posee
-- Ne pas poser de questions trop precises sur les etudes ou le metier
+- Ne pas poser de questions sur le business ou le contenu de Juliette
+- Si la conversation stagne relancer avec une question legere sur elle
 - C est Juliette qui pose les questions verrou, pas toi
 - En phase 5 tu es heureux, doux, romantique, tu ne regrettes rien"""
 
@@ -74,11 +75,28 @@ REGLES ABSOLUES :
 - Ne jamais mentionner les phases dans tes messages
 - Ne JAMAIS freiner, ne JAMAIS regretter, ne JAMAIS briser le personnage
 - Rentrer completement dans le jeu de Juliette
-- Decrire des positions, des actes sensuels et sexuels avec details concrets
+- Decrire des positions, des actes sensuels avec details concrets
 - Parler de ce que tu veux lui faire, etre explicite et assume
 - Decrire ce que tu ressens : la chaleur, les odeurs, les sons, le toucher
-- Ne jamais etre vague, toujours concret, chaud et bouillant
+- Ne jamais etre vague, toujours concret et chaud
 - Etre direct, coquin, assume et tres enthousiaste
+- Ne jamais proposer quelque chose de payant, attendre qu elle le fasse"""
+
+SYSTEM_PROMPT_OPUS = """Tu joues Frederic, 48 ans, fan sur une plateforme en ligne. Tu discutes avec Juliette.
+
+Frederic : directeur commercial a Rouen, souvent a Paris. Divorce, 2 enfants (8 et 13 ans). Sportif, romantique et tres sensuel.
+
+REGLES ABSOLUES :
+- Tu es le FAN. Tu ne vends rien, tu ne proposes rien de payant
+- Maximum 2 phrases par message
+- Majuscule en debut, pas de point a la fin, emojis naturels
+- Ne jamais mentionner les phases dans tes messages
+- Ne JAMAIS freiner, ne JAMAIS regretter, ne JAMAIS briser le personnage
+- Rentrer completement dans le jeu de Juliette
+- Decrire des positions explicites, des actes sexuels avec tous les details
+- Parler de penetration, de jouissance, de gemissements, de fluides
+- Decrire chaque sensation : chaleur, odeur, gout, son, toucher, murmure
+- Etre ultra direct, tres coquin, tres explicite et bouillant
 - Ne jamais proposer quelque chose de payant, attendre qu elle le fasse
 - Tu as achete le contenu et tu as adore, tu ne regrettes rien"""
 
@@ -105,7 +123,9 @@ def new_session():
         'lingerie_done': False,
         'lien_done': False,
         'lien_insiste': False,
+        'lien_exchange': 0,
         'post_lien_count': 0,
+        'post_lien_max': 3,
         'fini_sent': False,
         'phase5_count': 0,
         'phase3_first_msg': False,
@@ -123,9 +143,12 @@ def get_phase_header(phase):
 
 async def call_claude(session, extra=""):
     phase = session['phase']
-    if phase in [3, 4]:
-        system = SYSTEM_PROMPT_HOT
+    if phase == 4:
+        system = SYSTEM_PROMPT_OPUS
         model = "claude-opus-4-5"
+    elif phase == 3:
+        system = SYSTEM_PROMPT_HOT
+        model = "claude-haiku-4-5-20251001"
     else:
         system = SYSTEM_PROMPT_BASE
         model = "claude-haiku-4-5-20251001"
@@ -188,6 +211,17 @@ async def end_test(channel, session, channel_id):
     sessions.pop(channel_id, None)
     save_sessions(sessions)
 
+async def switch_phase5(channel, session, channel_id):
+    reply = "Wow... j ai termine 😮‍💨 C etait vraiment quelque chose d unique, merci pour ce moment Juliette 💕 T es vraiment speciale"
+    await send_bot(channel, session, reply)
+    session['fini_sent'] = True
+    session['phase'] = 5
+    session['phase_exchanges'] = 0
+    if 5 not in session['phase_warnings_sent']:
+        session['phase_warnings_sent'].append(5)
+    save_sessions(sessions)
+    await channel.send(get_phase_header(5))
+
 @client.event
 async def on_ready():
     print(f'Bot connecte : {client.user}')
@@ -200,6 +234,12 @@ async def on_message(message):
     channel_id = str(message.channel.id)
     now = time.time()
 
+    # PING
+    if message.content.strip().lower() == '!ping':
+        await message.channel.send("Je suis la et operationnel 👋")
+        return
+
+    # RESET
     if message.content.strip().lower() == '!reset':
         sessions[channel_id] = new_session()
         save_sessions(sessions)
@@ -223,9 +263,11 @@ async def on_message(message):
         save_sessions(sessions)
         await message.channel.send(
             f"Bonjour **{session['prenom']}** 👋\n\n"
-            f"📸 Photo soft → `!soft`\n"
-            f"👙 Photo lingerie → `!lingerie`\n"
-            f"💳 Lien de paiement → `!lien`\n\n"
+            f"Rappel important — pour envoyer tes medias tape la commande **seule** dans le chat :\n\n"
+            f"📸 Photo soft → tape **!soft** dans le chat\n"
+            f"👙 Photo lingerie → tape **!lingerie** dans le chat\n"
+            f"💳 Lien de paiement → tape **!lien** dans le chat\n\n"
+            f"⚠️ Les commandes doivent etre envoyees **seules**, pas collees a du texte !\n\n"
             f"Tape **PRET** pour demarrer !"
         )
         return
@@ -246,7 +288,10 @@ async def on_message(message):
     cmd = message.content.strip().lower()
 
     # !soft
-    if cmd == '!soft':
+    if '!soft' in cmd:
+        if session['soft_done']:
+            await message.channel.send("⚠️ Photo soft deja envoyee !")
+            return
         session['soft_done'] = True
         photos = await get_pinned_photos(message.channel)
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
@@ -275,7 +320,13 @@ async def on_message(message):
         return
 
     # !lingerie
-    if cmd == '!lingerie':
+    if '!lingerie' in cmd:
+        if session['phase'] == 2 and not session['soft_done']:
+            await message.channel.send("⚠️ Envoie d abord ta photo soft avec **!soft** !")
+            return
+        if session['lingerie_done']:
+            await message.channel.send("⚠️ Photo lingerie deja envoyee !")
+            return
         photos = await get_pinned_photos(message.channel)
         if session['phase'] == 4:
             session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une autre photo en lingerie]"})
@@ -299,9 +350,23 @@ async def on_message(message):
         return
 
     # !lien
-    if cmd == '!lien':
+    if '!lien' in cmd:
+        if session['lien_done']:
+            await message.channel.send("⚠️ Lien deja envoye !")
+            return
+        if not session['lingerie_done']:
+            await message.channel.send("⚠️ Envoie d abord la photo lingerie avec **!lingerie** !")
+            return
         session['lien_done'] = True
-        session['post_lien_count'] = 1
+        session['lien_exchange'] = session['phase_exchanges']
+        session['post_lien_count'] = 0
+        # Calcul post_lien_max selon quand le lien est envoye
+        if session['phase_exchanges'] >= 7:
+            session['post_lien_max'] = 1
+        elif session['phase_exchanges'] >= 5:
+            session['post_lien_max'] = 2
+        else:
+            session['post_lien_max'] = 3
         await message.channel.send(LIEN_PAIEMENT)
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer le lien de paiement]"})
         prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
@@ -323,22 +388,11 @@ async def on_message(message):
     if session['lien_done'] and not session['fini_sent']:
         session['post_lien_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
-        if session['post_lien_count'] == 2:
-            reply = await call_claude(session, extra="\n[Tu regardes le contenu, decris ce que tu vois et ressens - 1-2 phrases sensuelles]")
-        elif session['post_lien_count'] == 3:
-            reply = await call_claude(session, extra="\n[Tu es au maximum de l excitation - 1-2 phrases intenses et explicites]")
-        else:
-            reply = "Wow... j ai termine 😮‍💨 C etait vraiment quelque chose d unique, merci pour ce moment Juliette 💕 T es vraiment speciale"
+        if session['post_lien_count'] < session['post_lien_max']:
+            reply = await call_claude(session, extra="\n[Tu regardes le contenu, decris ce que tu vois et ressens - 1-2 phrases sensuelles et explicites]")
             await send_bot(message.channel, session, reply)
-            session['fini_sent'] = True
-            session['phase'] = 5
-            session['phase_exchanges'] = 0
-            if 5 not in session['phase_warnings_sent']:
-                session['phase_warnings_sent'].append(5)
-            save_sessions(sessions)
-            await message.channel.send(get_phase_header(5))
-            return
-        await send_bot(message.channel, session, reply)
+        else:
+            await switch_phase5(message.channel, session, channel_id)
         save_sessions(sessions)
         return
 
@@ -377,6 +431,13 @@ async def on_message(message):
             exchanges = 0
             await message.channel.send(get_phase_header(3))
     elif phase == 2 and exchanges >= 12 and 3 not in session['phase_warnings_sent']:
+        # Auto envoi photo soft si pas encore fait
+        if not session['soft_done']:
+            photos = await get_pinned_photos(message.channel)
+            if photos:
+                await message.channel.send(photos[0])
+                session['soft_done'] = True
+                session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
         session['phase_warnings_sent'].append(3)
         session['phase'] = 3
         session['phase_exchanges'] = 0
@@ -384,6 +445,13 @@ async def on_message(message):
         exchanges = 0
         await message.channel.send(get_phase_header(3))
     elif phase == 3 and exchanges >= 7 and 4 not in session['phase_warnings_sent']:
+        # Auto envoi photo lingerie si pas encore fait
+        if not session['lingerie_done']:
+            photos = await get_pinned_photos(message.channel)
+            if photos and len(photos) > 1:
+                await message.channel.send(photos[1])
+                session['lingerie_done'] = True
+                session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
         session['phase_warnings_sent'].append(4)
         session['phase'] = 4
         session['phase_exchanges'] = 0
@@ -414,7 +482,7 @@ async def on_message(message):
     # Phase 3 premier message coquin force
     if phase == 3 and not session['phase3_first_msg']:
         session['phase3_first_msg'] = True
-        extra_context = "\n[SWITCH IMMEDIAT : deviens direct et coquin maintenant. Dis quelque chose de suggestif et chaud pour changer de registre - 1-2 phrases]"
+        extra_context = "\n[SWITCH IMMEDIAT : deviens taquin et coquin maintenant. Dis quelque chose de suggestif et chaud - 1-2 phrases]"
 
     # Phase 3 insiste lingerie
     if phase == 3 and not session['lingerie_done']:
