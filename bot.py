@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import json
-import urllib.request
+import aiohttp
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 class Handler(BaseHTTPRequestHandler):
@@ -120,24 +120,21 @@ def get_phase_header(phase):
     return headers.get(phase, "")
 
 async def call_openrouter(messages, system):
-    data = json.dumps({
-        "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo",
-        "messages": [{"role": "system", "content": system}] + messages,
-        "max_tokens": 250
-    }).encode('utf-8')
-
-    req = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        }
-    )
-
-    with urllib.request.urlopen(req) as response:
-        result = json.loads(response.read().decode('utf-8'))
-        return result['choices'][0]['message']['content']
+    async with aiohttp.ClientSession() as http:
+        async with http.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo",
+                "messages": [{"role": "system", "content": system}] + messages,
+                "max_tokens": 250
+            }
+        ) as resp:
+            result = await resp.json()
+            return result['choices'][0]['message']['content']
 
 async def call_claude(session, extra=""):
     phase = session['phase']
@@ -213,7 +210,7 @@ async def on_message(message):
         pinned = await message.channel.pins()
         pinned_ids = [m.id for m in pinned]
         await message.channel.purge(limit=1000, check=lambda m: m.id not in pinned_ids)
-        await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nRemonte lire les consignes epinglees en haut ⬆️\nCommence par taper ton **prenom** !")
+        await message.channel.send("Salon remis a zero 🔄\n\nBonjour a toi 👋\nCommence par taper ton **prenom** !")
         return
 
     if channel_id not in sessions:
@@ -230,11 +227,10 @@ async def on_message(message):
         save_sessions(sessions)
         await message.channel.send(
             f"Bonjour **{session['prenom']}** 👋\n\n"
-            f"Rappel des commandes :\n"
-            f"📸 Photo soft → tape `!soft`\n"
-            f"👙 Photo lingerie → tape `!lingerie`\n"
-            f"💳 Lien de paiement → tape `!lien`\n\n"
-            f"Quand tu es pret(e), tape **PRET** pour demarrer !"
+            f"📸 Photo soft → `!soft`\n"
+            f"👙 Photo lingerie → `!lingerie`\n"
+            f"💳 Lien de paiement → `!lien`\n\n"
+            f"Tape **PRET** pour demarrer !"
         )
         return
 
@@ -248,41 +244,35 @@ async def on_message(message):
             intro = "Salut Juliette, je t'ai vue sur Instagram, je me suis permis de t'ajouter ici pour discuter... j'espere que ca te derange pas"
             await send_bot(message.channel, session, intro)
         else:
-            await message.channel.send("Tape **PRET** quand tu es pret(e) a commencer !")
+            await message.channel.send("Tape **PRET** pour demarrer !")
         return
 
     cmd = message.content.strip().lower()
-
-    # Detection "t'es la ?"
-    if any(x in cmd for x in ["t'es la", "tes la", "t es la", "tu es la", "hello", "tu reponds"]):
-        await message.channel.send("Oui je suis la 😊")
-        return
 
     # !soft
     if cmd == '!soft':
         session['soft_done'] = True
         photos = await get_pinned_photos(message.channel)
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
 
         if session['phase'] == 3:
-            session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
+            if photos:
+                await message.channel.send(photos[0])
             reply = await call_claude(session, extra="\n[Photo soft recue en phase 3. Complimente en 1 phrase et demande direct une photo plus osee/lingerie]")
             await send_bot(message.channel, session, reply)
+        else:
             if photos:
                 await message.channel.send(photos[0])
-        else:
-            session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
             compliment = await call_claude(session, extra="\n[Photo soft recue. Complimente en 1 phrase courte et sincere]")
             await send_bot(message.channel, session, compliment)
-            if photos:
-                await message.channel.send(photos[0])
             session['waiting_photo_confirm'] = True
             await send_bot(message.channel, session, "Et toi tu veux pas savoir a quoi je ressemble ? 😏")
 
         save_sessions(sessions)
         return
 
-    # Detection reponse oui a la photo de Frederic
-    mots_oui = ['oui', 'yes', 'bien sur', 'montre', 'vas-y', 'go', 'carrément', 'evidemment', 'of course', 'show']
+    # Detection reponse a la photo de Frederic
+    mots_oui = ['oui', 'yes', 'bien sur', 'montre', 'vas-y', 'go', 'carrément', 'evidemment', 'show', 'ok']
     if session.get('waiting_photo_confirm') and any(mot in cmd for mot in mots_oui):
         session['waiting_photo_confirm'] = False
         await message.channel.send("https://imgur.com/a/cvlxRw6")
@@ -296,9 +286,9 @@ async def on_message(message):
 
         if session['phase'] == 4:
             session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une autre photo en lingerie]"})
-            reply = await call_claude(session, extra="\n[Lingerie recue en phase 4. Reagis avec enthousiasme et demande le lien video direct]")
             if photos and len(photos) > 1:
                 await message.channel.send(photos[1])
+            reply = await call_claude(session, extra="\n[Lingerie recue en phase 4. Reagis avec enthousiasme et demande le lien direct]")
             await send_bot(message.channel, session, reply)
             save_sessions(sessions)
             return
@@ -321,7 +311,7 @@ async def on_message(message):
         session['lien_done'] = True
         session['post_lien_count'] = 1
         await message.channel.send(LIEN_PAIEMENT)
-        session['messages'].append({"role": "user", "content": f"[Juliette vient d envoyer le lien de paiement : {LIEN_PAIEMENT}]"})
+        session['messages'].append({"role": "user", "content": f"[Juliette vient d envoyer le lien de paiement]"})
         prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
         await send_bot(message.channel, session, prise)
         save_sessions(sessions)
