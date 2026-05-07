@@ -1,6 +1,5 @@
 import discord
 import os
-import anthropic
 import threading
 import time
 import json
@@ -28,9 +27,7 @@ intents.messages = True
 client = discord.Client(intents=intents)
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
+LIEN_PAIEMENT = "https://app.dropp.fans/fr/external/share/link/link_10b3p9E8ICCwUufk6Zvs/"
 SESSIONS_FILE = "sessions.json"
 
 def load_sessions():
@@ -97,9 +94,9 @@ def new_session():
         'chatter_message_count': 0,
         'asked_city': False,
         'cafe_done': False,
-        'cafe_question_pending': False,
         'asked_photo': False,
         'soft_done': False,
+        'waiting_photo_confirm': False,
         'calecon_sent': False,
         'calecon_responded': False,
         'lingerie_insiste': False,
@@ -122,17 +119,14 @@ def get_phase_header(phase):
     }
     return headers.get(phase, "")
 
-async def call_openrouter(messages, system, model="nousresearch/nous-hermes-2-mixtral-8x7b-dpo"):
-    import json as json_lib
-    import urllib.request as urllib_req
-    
-    data = json_lib.dumps({
-        "model": model,
+async def call_openrouter(messages, system):
+    data = json.dumps({
+        "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo",
         "messages": [{"role": "system", "content": system}] + messages,
         "max_tokens": 250
     }).encode('utf-8')
-    
-    req = urllib_req.Request(
+
+    req = urllib.request.Request(
         "https://openrouter.ai/api/v1/chat/completions",
         data=data,
         headers={
@@ -140,34 +134,31 @@ async def call_openrouter(messages, system, model="nousresearch/nous-hermes-2-mi
             "Content-Type": "application/json"
         }
     )
-    
-    with urllib_req.urlopen(req) as response:
-        result = json_lib.loads(response.read().decode('utf-8'))
+
+    with urllib.request.urlopen(req) as response:
+        result = json.loads(response.read().decode('utf-8'))
         return result['choices'][0]['message']['content']
 
 async def call_claude(session, extra=""):
     phase = session['phase']
     system = SYSTEM_PROMPT_HOT if phase in [3, 4] else SYSTEM_PROMPT_BASE
     ctx = f"\n\n[PHASE {phase} - NE JAMAIS MENTIONNER DANS TES MESSAGES]{extra}"
-    
-    try:
-        reply = await call_openrouter(session['messages'], system + ctx)
-        return reply
-    except:
-        # Fallback sur Anthropic si OpenRouter echoue
-        model = "claude-opus-4-5" if phase in [3, 4] else "claude-haiku-4-5-20251001"
-        response = anthropic_client.messages.create(
-            model=model,
-            max_tokens=250,
-            system=system + ctx,
-            messages=session['messages']
-        )
-        return response.content[0].text
+    return await call_openrouter(session['messages'], system + ctx)
 
 async def send_bot(channel, session, text):
     session['messages'].append({"role": "assistant", "content": text})
     save_sessions(sessions)
     await channel.send(text)
+
+async def get_pinned_photos(channel):
+    pins = await channel.pins()
+    photos = []
+    for pin in reversed(pins):
+        if pin.attachments:
+            for att in pin.attachments:
+                if any(att.filename.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    photos.append(att.url)
+    return photos
 
 async def end_test(channel, session, channel_id):
     prenom = session.get('prenom', 'Inconnu')
@@ -179,26 +170,26 @@ async def end_test(channel, session, channel_id):
     maxi = int(max(times)) if times else 0
     rythme = int(msgs / (duree / 60)) if duree > 0 else 0
 
-    # Detection signe IA
-    if times:
+    if times and len(times) > 2:
         variance = sum((t - moy)**2 for t in times) / len(times)
-        signe_ia = "POSSIBLE ⚠️" if variance < 10 and moy < 20 else "NON detecte ✅"
+        signe_ia = "POSSIBLE ⚠️" if variance < 15 and moy < 15 else "NON detecte ✅"
     else:
         signe_ia = "Pas assez de donnees"
 
-    stats = f"""━━━━━━━━━━━━━━━━━━
-✅ **TEST TERMINE — {prenom}**
-━━━━━━━━━━━━━━━━━━
-⏱️ **Stats de reponse**
-Duree totale : {duree} min
-Messages envoyes : {msgs}
-Rythme : {rythme} msgs/heure
-Reponse moyenne : {moy}s
-Plus rapide : {mini}s
-Plus lente : {maxi}s
-🤖 Signe IA : {signe_ia}
-━━━━━━━━━━━━━━━━━━
-On analyse les resultats et on te tient au courant 👍"""
+    stats = (
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"✅ **TEST TERMINE — {prenom}**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⏱️ Duree : {duree} min\n"
+        f"💬 Messages : {msgs}\n"
+        f"🔥 Rythme : {rythme} msgs/heure\n"
+        f"⚡ Reponse moyenne : {moy}s\n"
+        f"🟢 Plus rapide : {mini}s\n"
+        f"🔴 Plus lente : {maxi}s\n"
+        f"🤖 Signe IA : {signe_ia}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"On analyse les resultats et on te tient au courant 👍"
+    )
 
     await channel.send(stats)
     sessions.pop(channel_id, None)
@@ -262,38 +253,52 @@ async def on_message(message):
 
     cmd = message.content.strip().lower()
 
+    # Detection "t'es la ?"
+    if any(x in cmd for x in ["t'es la", "tes la", "t es la", "tu es la", "hello", "tu reponds"]):
+        await message.channel.send("Oui je suis la 😊")
+        return
+
     # !soft
     if cmd == '!soft':
         session['soft_done'] = True
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft d elle]"})
-        
+        photos = await get_pinned_photos(message.channel)
+
         if session['phase'] == 3:
-            # En phase 3 soft = demande photo plus coquine
-            compliment = await call_claude(session, extra="\n[Photo soft recue en phase 3. Complimente en 1 phrase et demande direct une photo plus osee/lingerie]")
+            session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
+            reply = await call_claude(session, extra="\n[Photo soft recue en phase 3. Complimente en 1 phrase et demande direct une photo plus osee/lingerie]")
+            await send_bot(message.channel, session, reply)
+            if photos:
+                await message.channel.send(photos[0])
         else:
-            # En phase 2 soft = compliment + proposition photo
+            session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo soft]"})
             compliment = await call_claude(session, extra="\n[Photo soft recue. Complimente en 1 phrase courte et sincere]")
             await send_bot(message.channel, session, compliment)
+            if photos:
+                await message.channel.send(photos[0])
+            session['waiting_photo_confirm'] = True
             await send_bot(message.channel, session, "Et toi tu veux pas savoir a quoi je ressemble ? 😏")
-            await message.channel.send("https://imgur.com/a/cvlxRw6")
-            session['messages'].append({"role": "assistant", "content": "https://imgur.com/a/cvlxRw6"})
-            save_sessions(sessions)
-            return
-        
-        await send_bot(message.channel, session, compliment)
+
+        save_sessions(sessions)
+        return
+
+    # Detection reponse oui a la photo de Frederic
+    mots_oui = ['oui', 'yes', 'bien sur', 'montre', 'vas-y', 'go', 'carrément', 'evidemment', 'of course', 'show']
+    if session.get('waiting_photo_confirm') and any(mot in cmd for mot in mots_oui):
+        session['waiting_photo_confirm'] = False
+        await message.channel.send("https://imgur.com/a/cvlxRw6")
+        session['messages'].append({"role": "assistant", "content": "https://imgur.com/a/cvlxRw6"})
         save_sessions(sessions)
         return
 
     # !lingerie
     if cmd == '!lingerie':
-        if not session['soft_done'] and session['phase'] < 3:
-            await message.channel.send("⚠️ Envoie d abord **!soft** !")
-            return
-        
+        photos = await get_pinned_photos(message.channel)
+
         if session['phase'] == 4:
-            # En phase 4 lingerie = reagi + demande lien direct
             session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une autre photo en lingerie]"})
             reply = await call_claude(session, extra="\n[Lingerie recue en phase 4. Reagis avec enthousiasme et demande le lien video direct]")
+            if photos and len(photos) > 1:
+                await message.channel.send(photos[1])
             await send_bot(message.channel, session, reply)
             save_sessions(sessions)
             return
@@ -305,6 +310,8 @@ async def on_message(message):
             session['phase_warnings_sent'].append(4)
         await message.channel.send(get_phase_header(4))
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer une photo en lingerie]"})
+        if photos and len(photos) > 1:
+            await message.channel.send(photos[1])
         reply = await call_claude(session, extra="\n[Photo lingerie recue. Tu es excite, decris ce que tu ressens en 1-2 phrases sensuelles]")
         await send_bot(message.channel, session, reply)
         return
@@ -313,7 +320,8 @@ async def on_message(message):
     if cmd == '!lien':
         session['lien_done'] = True
         session['post_lien_count'] = 1
-        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer un lien de paiement]"})
+        await message.channel.send(LIEN_PAIEMENT)
+        session['messages'].append({"role": "user", "content": f"[Juliette vient d envoyer le lien de paiement : {LIEN_PAIEMENT}]"})
         prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
         await send_bot(message.channel, session, prise)
         save_sessions(sessions)
@@ -407,7 +415,6 @@ async def on_message(message):
 
     # ACTIONS SEQUENCEES
     session['messages'].append({"role": "user", "content": message.content})
-
     extra_context = ""
 
     if phase == 2:
@@ -417,8 +424,7 @@ async def on_message(message):
 
         elif exchanges == 5 and not session['cafe_done']:
             session['cafe_done'] = True
-            session['cafe_question_pending'] = True
-            extra_context = "\n[Reponds d abord a ce qu elle dit en 1 phrase, puis dans la meme reponse glisse naturellement : Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe ensemble un de ces jours ? 😊]"
+            extra_context = "\n[Reponds d abord a ce qu elle dit en 1 phrase, puis glisse : Au fait je suis souvent a Paris pour le boulot, ca te dirait qu on prenne un cafe ensemble un de ces jours ? 😊]"
 
         elif exchanges == 8 and not session['asked_photo']:
             session['asked_photo'] = True
@@ -434,12 +440,12 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-    # Phase 3 : premier message coquin force
+    # Phase 3 premier message coquin force
     if phase == 3 and not session['phase3_first_msg']:
         session['phase3_first_msg'] = True
-        extra_context = "\n[SWITCH IMMEDIAT : tu deviens taquin et coquin maintenant. Dis quelque chose de suggestif et chaleureux pour changer de registre - 1-2 phrases max]"
+        extra_context = "\n[SWITCH IMMEDIAT vers registre coquin et taquin. Dis quelque chose de suggestif et chaleureux - 1-2 phrases]"
 
-    # Phase 3 : insiste lingerie si tard
+    # Phase 3 insiste lingerie
     if phase == 3 and not session['lingerie_done']:
         if exchanges == 5 and not session['lingerie_insiste']:
             session['lingerie_insiste'] = True
@@ -453,11 +459,11 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-    # Phase 4 : insiste lien si tard
+    # Phase 4 insiste lien
     if phase == 4 and not session['lien_done']:
         if exchanges == 5 and not session['lien_insiste']:
             session['lien_insiste'] = True
-            extra_context = "\n[Le chatter tarde. Insiste naturellement pour voir la video/le lien]"
+            extra_context = "\n[Insiste naturellement pour voir la video/le lien]"
         elif exchanges >= 8:
             lien_force = "Tu m envoies le lien alors ? J en peux plus d attendre 🔥"
             await send_bot(message.channel, session, lien_force)
