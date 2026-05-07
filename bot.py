@@ -128,7 +128,7 @@ async def call_openrouter(messages, system):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "mistralai/mistral-7b-instruct:free",
+                "model": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
                 "messages": [{"role": "system", "content": system}] + messages,
                 "max_tokens": 250
             }
