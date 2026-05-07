@@ -128,7 +128,7 @@ async def call_openrouter(messages, system):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo",
+                "model": "mistralai/mistral-7b-instruct:free",
                 "messages": [{"role": "system", "content": system}] + messages,
                 "max_tokens": 250
             }
