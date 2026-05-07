@@ -143,7 +143,7 @@ def get_phase_header(phase):
 
 async def call_claude(session, extra=""):
     phase = session['phase']
-    if phase == 4:
+    if phase in [3, 4]
         system = SYSTEM_PROMPT_OPUS
         model = "claude-opus-4-5"
     elif phase == 3:
