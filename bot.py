@@ -75,6 +75,7 @@ REGLES ABSOLUES :
 - Ne jamais mentionner les phases dans tes messages
 - Ne JAMAIS freiner, ne JAMAIS regretter, ne JAMAIS briser le personnage
 - Rentrer completement dans le jeu de Juliette
+- Des le debut de la phase 3 etre frontal, coquin et direct
 - Decrire des positions explicites, des actes sexuels avec tous les details
 - Parler de penetration, de jouissance, de gemissements
 - Decrire chaque sensation : chaleur, odeur, gout, son, toucher, murmure
@@ -105,9 +106,6 @@ def new_session():
         'lingerie_done': False,
         'lien_done': False,
         'lien_insiste': False,
-        'lien_force_sent': False,
-        'post_lien_count': 0,
-        'post_lien_max': 3,
         'fini_sent': False,
         'phase5_count': 0,
         'phase3_first_msg': False,
@@ -156,7 +154,8 @@ async def get_pinned_photos(channel):
     return photos
 
 async def switch_phase5(channel, session, channel_id):
-    reply = "Wow... j ai termine 😮‍💨 C etait vraiment quelque chose d unique, merci pour ce moment Juliette 💕 T es vraiment speciale"
+    # Message de fin code en dur - zero appel Opus
+    reply = "J ai regarde ta video... putain j avais pas craque aussi vite depuis longtemps 🥵 C etait incroyable, merci pour ce moment bebe 💕"
     await send_bot(channel, session, reply)
     session['fini_sent'] = True
     session['phase'] = 5
@@ -165,16 +164,6 @@ async def switch_phase5(channel, session, channel_id):
         session['phase_warnings_sent'].append(5)
     save_sessions(sessions)
     await channel.send(get_phase_header(5))
-
-async def force_lien(channel, session, channel_id):
-    session['lien_done'] = True
-    session['post_lien_count'] = 0
-    session['post_lien_max'] = 1
-    await channel.send(LIEN_PAIEMENT)
-    session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer le lien de paiement]"})
-    prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
-    await send_bot(channel, session, prise)
-    save_sessions(sessions)
 
 async def end_test(channel, session, channel_id):
     prenom = session.get('prenom', 'Inconnu')
@@ -285,7 +274,7 @@ async def on_message(message):
         if session['phase'] == 3:
             if photos:
                 await message.channel.send(photos[0])
-            reply = await call_claude(session, extra="\n[Photo soft recue en phase 3. Complimente en 1 phrase et demande direct une photo plus osee/lingerie]")
+            reply = await call_claude(session, extra="\n[Photo soft recue en phase 3. Complimente en 1 phrase et demande direct une photo plus osee/lingerie de maniere coquine et frontale]")
             await send_bot(message.channel, session, reply)
         else:
             if photos:
@@ -326,7 +315,7 @@ async def on_message(message):
             await message.channel.send(photos[1])
         elif photos:
             await message.channel.send(photos[0])
-        reply = await call_claude(session, extra="\n[Photo lingerie recue. Tu es excite, decris ce que tu ressens en 1-2 phrases sensuelles]")
+        reply = await call_claude(session, extra="\n[Photo lingerie recue. Tu es excite, decris ce que tu ressens en 1-2 phrases sensuelles et directes]")
         await send_bot(message.channel, session, reply)
         return
 
@@ -339,18 +328,9 @@ async def on_message(message):
             await message.channel.send("⚠️ Envoie d abord la photo lingerie avec **!lingerie** !")
             return
         session['lien_done'] = True
-        session['post_lien_count'] = 0
-        if session['phase_exchanges'] >= 7:
-            session['post_lien_max'] = 1
-        elif session['phase_exchanges'] >= 5:
-            session['post_lien_max'] = 2
-        else:
-            session['post_lien_max'] = 3
         await message.channel.send(LIEN_PAIEMENT)
         session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer le lien de paiement]"})
-        prise = await call_claude(session, extra="\n[Lien payant recu. Tu le prends immediatement avec enthousiasme - 1 phrase]")
-        await send_bot(message.channel, session, prise)
-        save_sessions(sessions)
+        await switch_phase5(message.channel, session, channel_id)
         return
 
     # MESURE TEMPS
@@ -363,19 +343,7 @@ async def on_message(message):
     phase = session['phase']
     exchanges = session['phase_exchanges']
 
-    # POST LIEN — priorite absolue
-    if session['lien_done'] and not session['fini_sent']:
-        session['post_lien_count'] += 1
-        session['messages'].append({"role": "user", "content": message.content})
-        if session['post_lien_count'] < session['post_lien_max']:
-            reply = await call_claude(session, extra="\n[Tu regardes le contenu, decris ce que tu vois et ressens - 1-2 phrases sensuelles]")
-            await send_bot(message.channel, session, reply)
-        else:
-            await switch_phase5(message.channel, session, channel_id)
-        save_sessions(sessions)
-        return
-
-    # PHASE 5 — priorite absolue
+    # PHASE 5
     if phase == 5:
         session['phase5_count'] += 1
         session['messages'].append({"role": "user", "content": message.content})
@@ -391,7 +359,7 @@ async def on_message(message):
         save_sessions(sessions)
         return
 
-    # PASSAGES DE PHASE — strictement séquentiels
+    # PASSAGES DE PHASE
     if phase == 1 and exchanges >= 7 and 2 not in session['phase_warnings_sent']:
         session['phase_warnings_sent'].append(2)
         session['phase'] = 2
@@ -424,7 +392,7 @@ async def on_message(message):
         exchanges = 0
         await message.channel.send(get_phase_header(3))
 
-    elif phase == 3 and exchanges >= 7 and 4 not in session['phase_warnings_sent']:
+    elif phase == 3 and exchanges >= 6 and 4 not in session['phase_warnings_sent']:
         if not session['lingerie_done']:
             photos = await get_pinned_photos(message.channel)
             if photos and len(photos) > 1:
@@ -441,11 +409,13 @@ async def on_message(message):
         await message.channel.send(get_phase_header(4))
 
     elif phase == 4 and exchanges >= 7 and not session['lien_done']:
-        # Force le lien automatiquement a l'echange 7
-        await force_lien(message.channel, session, channel_id)
+        session['lien_done'] = True
+        await message.channel.send(LIEN_PAIEMENT)
+        session['messages'].append({"role": "user", "content": "[Juliette vient d envoyer le lien de paiement]"})
+        await switch_phase5(message.channel, session, channel_id)
         return
 
-    # ACTIONS SEQUENCEES PHASE 2
+    # ACTIONS SEQUENCEES
     session['messages'].append({"role": "user", "content": message.content})
     extra_context = ""
 
@@ -467,22 +437,28 @@ async def on_message(message):
             save_sessions(sessions)
             return
 
-    # Phase 3 premier message coquin force
+    # Phase 3 premier message coquin force et frontal
     if phase == 3 and not session['phase3_first_msg']:
         session['phase3_first_msg'] = True
-        extra_context = "\n[SWITCH IMMEDIAT : deviens taquin et coquin maintenant. Dis quelque chose de suggestif et chaud - 1-2 phrases]"
+        extra_context = "\n[SWITCH IMMEDIAT : sois frontal, coquin et direct maintenant. Dis quelque chose de suggestif et chaud sans detour - 1-2 phrases]"
 
-    # Phase 3 insiste lingerie — une seule fois a l'echange 4
+    # Phase 3 insiste lingerie echange 4
     if phase == 3 and not session['lingerie_done'] and exchanges == 4 and not session['lingerie_insiste']:
         session['lingerie_insiste'] = True
-        await send_bot(message.channel, session, "T as pas quelque chose de plus osé a me montrer ? J ai envie de te voir encore plus 😏")
+        await send_bot(message.channel, session, "T as pas une photo en lingerie pour moi ? J ai vraiment envie de te voir 🔥")
         save_sessions(sessions)
         return
 
-    # Phase 4 insiste lien — une seule fois a l'echange 4
-    if phase == 4 and not session['lien_done'] and exchanges == 4 and not session['lien_insiste']:
+    # Phase 4 insiste lien echange 5
+    if phase == 4 and not session['lien_done'] and exchanges == 5 and not session['lien_insiste']:
         session['lien_insiste'] = True
-        extra_context = "\n[Insiste naturellement pour voir la video/le lien, tu en peux plus]"
+        extra_context = "\n[Insiste pour voir la video/le lien, tu en peux plus, sois direct]"
+
+    # Phase 4 demande lien echange 6 en dur
+    if phase == 4 and not session['lien_done'] and exchanges == 6:
+        await send_bot(message.channel, session, "Tu m envoies le lien alors ? J en peux vraiment plus d attendre 🔥")
+        save_sessions(sessions)
+        return
 
     if len(session['messages']) >= 120:
         await end_test(message.channel, session, channel_id)
